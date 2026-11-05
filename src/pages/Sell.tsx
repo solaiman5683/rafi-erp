@@ -15,6 +15,7 @@ import {
   TriangleAlert,
   UserRound,
   X,
+  PackagePlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -150,25 +151,21 @@ export default function Sell() {
   const stockOfVariant = (id: string) => variantIndex.get(id)?.v.stock ?? 0;
 
   /** স্টকের বেশি দিতে চাইলে সতর্কবার্তা */
+  /** স্টকের চেয়ে বেশি দিলে শুধু জানিয়ে দেয় — বিক্রি আটকায় না, স্টক মাইনাসে যায় */
   function warnStock(name: string, stock: number, unit: string) {
     const u = B(UNITS[unit]) || unit;
     toast.warning(
-      stock > 0
-        ? L(`${name}: স্টকে আছে মাত্র ${num(stock)} ${u} — এর বেশি দেওয়া যাবে না`, `${name}: only ${num(stock)} ${u} in stock`)
-        : L(`${name}: স্টকে নেই`, `${name}: out of stock`),
+      L(`${name}: স্টকে আছে ${num(stock)} ${u} — বিক্রি হবে, স্টক মাইনাসে যাবে`, `${name}: ${num(stock)} ${u} in stock — sale allowed, stock will go negative`),
     );
   }
 
-  /** স্টক থাকলে এক যোগ করে; না থাকলে সতর্ক করে false দেয় */
+  /** এক যোগ করে; স্টক পেরোলে প্রথমবার জানিয়ে দেয় */
   function addVariant(item: CatalogItem, v: VariantWithStock): boolean {
     const have = draft.lines.find((l) => l.variant_id === v.id)?.qty ?? 0;
-    if (have + 1 > v.stock) {
-      warnStock(`${item.product.name}${v.name ? ` ${v.name}` : ""}`, v.stock, item.product.unit);
-      return false;
-    }
+    if (have + 1 > v.stock && have <= v.stock) warnStock(`${item.product.name}${v.name ? ` ${v.name}` : ""}`, v.stock, item.product.unit);
     setDraft((d) => {
       const existing = d.lines.find((l) => l.variant_id === v.id);
-      if (existing) return { ...d, lines: d.lines.map((l) => (l === existing ? { ...l, qty: round2(Math.min(l.qty + 1, v.stock)) } : l)) };
+      if (existing) return { ...d, lines: d.lines.map((l) => (l === existing ? { ...l, qty: round2(l.qty + 1) } : l)) };
       const line: Line = {
         key: newId(),
         variant_id: v.id,
@@ -199,6 +196,25 @@ export default function Sell() {
     setParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addParam, catalog]);
+
+  // নতুন পণ্য বানানোর পাতা থেকে ফিরলে (?pick=পণ্যের id) সেই পণ্য বাছাই করা অবস্থায়
+  const pickParam = params.get("pick");
+  const lastPicked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pickParam || !catalog || lastPicked.current === pickParam) return;
+    const item = catalog.find((i) => i.product.id === pickParam);
+    if (!item) return; // ক্যাটালগে আসা পর্যন্ত অপেক্ষা
+    lastPicked.current = pickParam;
+    onProductClick(item);
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickParam, catalog]);
+
+  /** খোঁজার লেখাটা নাম হিসেবে নিয়ে নতুন পণ্যের পাতা খোলে; সেভ হলে এখানে ফিরে কার্টে যোগ হয় */
+  function newProduct() {
+    const name = q.trim();
+    nav(`/products/new?from=sell${name ? `&name=${encodeURIComponent(name)}` : ""}`);
+  }
 
   function onProductClick(item: CatalogItem, matched: VariantWithStock[] = []) {
     // একটাই সাইজ, অথবা খোঁজায় ঠিক একটা সাইজ মিলেছে ("randa 1/2") — সরাসরি যোগ
@@ -232,10 +248,7 @@ export default function Sell() {
     const line = draft.lines.find((l) => l.key === key);
     if (line && patch.qty !== undefined) {
       const stock = stockOfVariant(line.variant_id);
-      if (patch.qty > stock) {
-        warnStock(`${line.name}${line.variant_name ? ` ${line.variant_name}` : ""}`, stock, line.unit);
-        patch = { ...patch, qty: Math.max(stock, 0) };
-      }
+      if (patch.qty > stock && line.qty <= stock) warnStock(`${line.name}${line.variant_name ? ` ${line.variant_name}` : ""}`, stock, line.unit);
     }
     setDraft((d) => ({ ...d, lines: d.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) }));
   }
@@ -259,9 +272,14 @@ export default function Sell() {
 
   async function complete() {
     if (!count) return toast.error(L("কার্টে কোনো পণ্য নেই", "Cart is empty"));
-    const over = draft.lines.find((l) => l.qty > stockOfVariant(l.variant_id));
-    if (over) return warnStock(`${over.name}${over.variant_name ? ` ${over.variant_name}` : ""}`, stockOfVariant(over.variant_id), over.unit);
     if (draft.lines.some((l) => l.qty <= 0)) return toast.error(L("পরিমাণ শূন্য হতে পারবে না", "Quantity can't be zero"));
+    // দ্রুত বানানো পণ্যের দাম না থাকলে দামের ঘর খুলে দেয়
+    const noPrice = draft.lines.find((l) => !(l.list_price > 0));
+    if (noPrice) {
+      toast.error(L(`${noPrice.name}: দাম দিন`, `${noPrice.name}: enter a price`));
+      setEditKey(noPrice.key);
+      return;
+    }
     if (due > 0 && !customer) {
       toast.error(L("বাকি রাখতে হলে কাস্টমার বাছাই করুন", "Choose a customer for credit sale"));
       setPickCustomer(true);
@@ -356,7 +374,7 @@ export default function Sell() {
                     onValueChange={(n) => setLine(l.key, { qty: n })}
                     className="w-16 [&_input]:h-9 [&_input]:border-0 [&_input]:px-1 [&_input]:text-center [&_input]:text-base"
                   />
-                  <Button variant="ghost" size="icon-sm" disabled={l.qty >= stock} onClick={() => setLine(l.key, { qty: round2(l.qty + 1) })} aria-label="plus">
+                  <Button variant="ghost" size="icon-sm" onClick={() => setLine(l.key, { qty: round2(l.qty + 1) })} aria-label="plus">
                     <Plus />
                   </Button>
                 </div>
@@ -372,8 +390,8 @@ export default function Sell() {
                 <span className="tabular font-bold">{money(c.total)}</span>
               </div>
               {l.qty > stock ? (
-                <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-red-600">
-                  <TriangleAlert className="size-3" /> {L(`স্টকে আছে মাত্র ${num(stock)} — পরিমাণ কমান`, `Only ${num(stock)} in stock — reduce quantity`)}
+                <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-amber-700">
+                  <TriangleAlert className="size-3" /> {L(`স্টকে আছে ${num(stock)} — বিক্রির পর স্টক হবে ${num(round2(stock - l.qty))}`, `${num(stock)} in stock — will be ${num(round2(stock - l.qty))} after sale`)}
                 </p>
               ) : (
                 l.qty === stock && (
@@ -471,6 +489,13 @@ export default function Sell() {
               </Button>
             )}
           </div>
+          {isOwner && (
+            <Button variant="outline" className="h-13 shrink-0 gap-1.5 border-2 px-3 font-semibold" onClick={newProduct} title={L("নতুন পণ্য বানিয়ে বিক্রি করুন", "Create a product and sell it")}>
+              <PackagePlus className="size-5" />
+              <span className="hidden @md:inline">{L("নতুন পণ্য", "New product")}</span>
+              <span className="@md:hidden">{L("নতুন", "New")}</span>
+            </Button>
+          )}
         </div>
         <div className="scrollbar-thin -mx-1 mb-4 flex gap-2 overflow-x-auto px-1 pb-1">
           <button
@@ -499,10 +524,17 @@ export default function Sell() {
             icon={PackageSearch}
             title={L("এখনো কোনো পণ্য নেই", "No products yet")}
             hint={L("আগে পণ্য যোগ করুন, তারপর বিক্রি করুন", "Add products first, then sell")}
-            action={isOwner && <Button onClick={() => nav("/products/new")}><Plus /> {L("পণ্য যোগ করুন", "Add product")}</Button>}
+            action={isOwner && <Button onClick={newProduct}><Plus /> {L("পণ্য যোগ করুন", "Add product")}</Button>}
           />
         ) : filtered.length === 0 ? (
-          <p className="py-10 text-center text-muted-foreground">{L("কিছু পাওয়া যায়নি", "Nothing found")}</p>
+          <div className="grid justify-items-center gap-3 py-10 text-center text-muted-foreground">
+            <p>{L("কিছু পাওয়া যায়নি", "Nothing found")}</p>
+            {isOwner && q.trim() && (
+              <Button size="lg" onClick={newProduct}>
+                <PackagePlus /> {L(`"${q.trim()}" নামে নতুন পণ্য বানান`, `Create "${q.trim()}" as a new product`)}
+              </Button>
+            )}
+          </div>
         ) : (
           // মোবাইলে এক সারিতে এক পণ্য — নাম, ব্র্যান্ড, সাইজ, দাম ও স্টক একসাথে; বড় পর্দায় ২-৩ কলাম
           <div className="grid gap-1.5 @2xl:grid-cols-2 @2xl:gap-2 @5xl:grid-cols-3">
@@ -726,23 +758,21 @@ function VariantDialog({
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-lg font-bold">{v.name ? <Highlight text={v.name} q={q} /> : L("সাধারণ", "Standard")}</span>
                     <StockBadge qty={v.stock} low={v.low_stock} unit={B(UNITS[item!.product.unit])} />
-                    {n > 0 && n >= v.stock && (
+                    {n > 0 && n > v.stock && (
                       <span className="mt-1 flex items-center gap-1 text-xs font-semibold text-amber-700">
-                        <TriangleAlert className="size-3" /> {L(`স্টকের সব (${num(v.stock)}) নেওয়া হয়েছে`, `All ${num(v.stock)} in stock taken`)}
+                        <TriangleAlert className="size-3" /> {L(`স্টকের চেয়ে বেশি — স্টক হবে ${num(round2(v.stock - n))}`, `More than stock — will be ${num(round2(v.stock - n))}`)}
                       </span>
                     )}
                   </span>
                   <span className="tabular text-lg font-bold text-emerald-700">{money(priceFor(v, customer))}</span>
                 </button>
-                {v.stock <= 0 ? (
-                  <span className="rounded-full bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">{L("স্টক নেই", "Out of stock")}</span>
-                ) : n > 0 ? (
+                {n > 0 ? (
                   <span className="flex items-center gap-1">
                     <Button variant="outline" size="icon" className="rounded-full" onClick={() => onRemove(v)} aria-label="minus">
                       <Minus />
                     </Button>
                     <span className="tabular w-8 text-center text-lg font-bold">{num(n)}</span>
-                    <Button size="icon" className="rounded-full bg-emerald-600 hover:bg-emerald-700" disabled={n >= v.stock} onClick={() => onAdd(v)} aria-label="plus">
+                    <Button size="icon" className="rounded-full bg-emerald-600 hover:bg-emerald-700" onClick={() => onAdd(v)} aria-label="plus">
                       <Plus />
                     </Button>
                   </span>

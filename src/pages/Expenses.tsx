@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 export default function Expenses() {
   const { L, B, money, date, num } = useI18n();
   const { isOwner } = useAuth();
-  const [range, setRange] = useDateRange("month");
+  const [range, setRange] = useDateRange("today");
   const [cat, setCat] = useState<string | null>(null);
   const [amount, setAmount] = useState(0);
   const [method, setMethod] = useState<PayMethod>("cash");
@@ -97,23 +97,36 @@ export default function Expenses() {
     <div>
       <PageHeader icon={Wallet} color="#e11d48" title={L("খরচ", "Expenses")} subtitle={L("দোকানের খরচ লিখুন — নিচের যেকোনো একটায় চাপ দিন", "Tap a category below to add an expense")} />
 
-      <div className="mb-6 grid grid-cols-2 gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]">
+      {/* মোট খরচ — পাতা নামালেও ওপরে আটকে থাকে */}
+      <div className="sticky top-16 z-10 -mx-4 mb-4 bg-background/95 px-4 py-2 backdrop-blur lg:-mx-6 lg:px-6">
+        <div className="flex items-center gap-3 rounded-2xl bg-rose-600 px-4 py-2.5 text-white shadow-md">
+          <span className="min-w-0">
+            <span className="block leading-tight font-semibold">{L("মোট খরচ", "Total expenses")}</span>
+            <span className="block truncate text-xs opacity-90">
+              {range.key === "all" ? L("সব সময়", "All time") : range.from === range.to ? date(range.from) : `${date(range.from)} – ${date(range.to)}`}
+            </span>
+          </span>
+          <span className="tabular ml-auto text-2xl font-bold">{money(total)}</span>
+        </div>
+      </div>
+
+      <div className="mb-5 grid grid-cols-3 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] sm:gap-2.5">
         {cats.map((c) => (
           <div key={c.id} className="relative">
             <button
               type="button"
               onClick={() => open(c.id)}
-              className="flex h-full w-full items-center gap-2.5 rounded-2xl border-2 bg-white p-2.5 text-left font-semibold shadow-xs transition hover:-translate-y-0.5 hover:shadow-md"
+              className="flex h-full w-full flex-col items-center gap-1.5 rounded-xl border-2 bg-white p-2 text-center text-xs font-semibold shadow-xs transition hover:-translate-y-0.5 hover:shadow-md sm:flex-row sm:gap-2.5 sm:rounded-2xl sm:p-2.5 sm:text-left sm:text-base"
               style={{ borderColor: `${c.color}33` }}
             >
-              <IconTile name={c.icon} color={c.color} size="md" />
-              <span className={cn("min-w-0 leading-tight", c.custom && isOwner && "pr-6")}>{B(c.label)}</span>
+              <IconTile name={c.icon} color={c.color} size="sm" />
+              <span className={cn("min-w-0 leading-tight", c.custom && isOwner && "sm:pr-6")}>{B(c.label)}</span>
             </button>
             {c.custom && isOwner && (
               <button
                 type="button"
                 onClick={() => setEditCat({ id: c.id, name: c.label[0], icon: c.icon, color: c.color })}
-                className="absolute top-1.5 right-1.5 grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+                className="absolute top-0.5 right-0.5 grid size-7 place-items-center rounded-full text-muted-foreground hover:bg-muted sm:top-1.5 sm:right-1.5"
                 aria-label={L("খাত এডিট", "Edit category")}
                 title={L("খাত এডিট", "Edit category")}
               >
@@ -126,10 +139,10 @@ export default function Expenses() {
           <button
             type="button"
             onClick={() => setEditCat({ icon: "Receipt", color: CATEGORY_COLORS[0] })}
-            className="flex items-center gap-2.5 rounded-2xl border-2 border-dashed bg-white/60 p-2.5 text-left font-semibold text-muted-foreground transition hover:border-primary hover:text-primary"
+            className="flex flex-col items-center gap-1.5 rounded-xl border-2 border-dashed bg-white/60 p-2 text-center text-xs font-semibold text-muted-foreground transition hover:border-primary hover:text-primary sm:flex-row sm:gap-2.5 sm:rounded-2xl sm:p-2.5 sm:text-left sm:text-base"
           >
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-muted">
-              <Plus className="size-6" />
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted">
+              <Plus className="size-5" />
             </span>
             <span className="leading-tight">{L("নতুন খাত", "New category")}</span>
           </button>
@@ -138,11 +151,6 @@ export default function Expenses() {
 
       <div className="mb-4 grid gap-3">
         <DateRangeBar value={range} onChange={setRange} />
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl bg-rose-600 p-4 text-white">
-        <span className="text-lg font-semibold">{L("মোট খরচ", "Total expenses")}</span>
-        <span className="tabular ml-auto text-3xl font-bold">{money(total)}</span>
       </div>
 
       {byCat.size > 0 && (

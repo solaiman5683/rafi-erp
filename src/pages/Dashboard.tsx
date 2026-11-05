@@ -5,6 +5,7 @@ import {
   BanknoteArrowDown,
   Boxes,
   ChevronRight,
+  ClipboardPen,
   HandCoins,
   PackagePlus,
   PackageX,
@@ -75,6 +76,26 @@ export default function Dashboard() {
     .flatMap((i) => i.variants.filter((v) => v.stock <= (v.low_stock ?? 0)).map((v) => ({ item: i, v })))
     .sort((a, b) => a.v.stock - b.v.stock);
 
+  // যেসব সাইজে কখনো স্টক দেওয়া হয়েছে (শুরুর স্টক, কেনা, ঠিক করা বা ফেরত)
+  const stocked = useLiveQuery(async () => {
+    const s = new Set<string>();
+    await db.stock_moves.each((m) => {
+      if (!m.deleted && m.type !== "sale" && m.type !== "void") s.add(m.variant_id);
+    });
+    return s;
+  }, []);
+  // দ্রুত বানানো পণ্য — দাম বা স্টক এখনো দেওয়া হয়নি
+  const incomplete = !isOwner || !stocked
+    ? []
+    : (catalog ?? []).flatMap((i) => {
+        const miss: string[] = [];
+        if (i.variants.some((v) => !(v.sell_price > 0))) miss.push(L("বিক্রি দাম নেই", "No sell price"));
+        if (i.variants.some((v) => !(v.buy_price > 0))) miss.push(L("কেনা দাম নেই", "No buy price"));
+        if (i.variants.some((v) => !stocked.has(v.id))) miss.push(L("স্টক দেওয়া হয়নি", "Stock not entered"));
+        return miss.length ? [{ item: i, miss }] : [];
+      });
+  const [showAllIncomplete, setShowAllIncomplete] = useState(false);
+
   const hour = new Date().getHours();
   const greet = hour < 12 ? L("শুভ সকাল", "Good morning") : hour < 17 ? L("শুভ দুপুর", "Good afternoon") : L("শুভ সন্ধ্যা", "Good evening");
   const t = data?.todaySum;
@@ -101,6 +122,48 @@ export default function Dashboard() {
         )}
         <ActionTile icon={Wallet} color="#e11d48" label={L("খরচ লিখুন", "Add expense")} hint={L("ভাড়া, বিল, চা-নাস্তা", "Rent, bills, tea")} onClick={() => nav("/expenses")} />
       </div>
+
+      {incomplete.length > 0 && (
+        <Card className="border-2 border-amber-300 bg-amber-50/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ClipboardPen className="size-5 text-amber-600" /> {L("তথ্য বাকি আছে", "Needs information")}
+              <span className="tabular rounded-full bg-amber-500 px-2 text-sm text-white">{num(incomplete.length)}</span>
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">{L("এই পণ্যগুলোর দাম বা স্টক এখনো দেওয়া হয়নি — চাপ দিয়ে পূরণ করুন", "These products are missing price or stock — tap to fill in")}</p>
+          </CardHeader>
+          <CardContent className="grid gap-2 sm:grid-cols-2">
+            {(showAllIncomplete ? incomplete : incomplete.slice(0, 6)).map(({ item, miss }) => (
+              <button
+                key={item.product.id}
+                type="button"
+                onClick={() => nav(`/products/${item.product.id}?from=home`)}
+                className="flex items-center gap-2 rounded-xl border bg-white p-2.5 text-left hover:border-amber-400"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold">
+                    {item.product.name}
+                    {item.product.brand && <span className="font-medium text-muted-foreground"> · {item.product.brand}</span>}
+                  </span>
+                  <span className="mt-1 flex flex-wrap gap-1">
+                    {miss.map((m) => (
+                      <span key={m} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                        {m}
+                      </span>
+                    ))}
+                  </span>
+                </span>
+                <ChevronRight className="size-5 shrink-0 text-muted-foreground" />
+              </button>
+            ))}
+            {incomplete.length > 6 && (
+              <Button variant="ghost" className="sm:col-span-2" onClick={() => setShowAllIncomplete((v) => !v)}>
+                {showAllIncomplete ? L("কম দেখান", "Show less") : L(`আরও ${num(incomplete.length - 6)}টি দেখুন`, `Show ${incomplete.length - 6} more`)}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div>
         <h2 className="mb-3 text-lg font-bold">{L("আজকের হিসাব", "Today")}</h2>

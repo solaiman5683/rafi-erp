@@ -158,7 +158,7 @@ export function StockBadge({ qty, low, unit }: { qty: number; low?: number; unit
     qty <= 0 ? "bg-red-100 text-red-700 ring-red-200" : qty <= (low ?? 0) ? "bg-amber-100 text-amber-800 ring-amber-200" : "bg-emerald-50 text-emerald-700 ring-emerald-200";
   return (
     <span className={cn("tabular inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1", tone)}>
-      {qty <= 0 ? L("স্টক নেই", "Out") : `${num(qty)} ${unit ?? ""}`}
+      {qty === 0 ? L("স্টক নেই", "Out") : `${num(qty)} ${unit ?? ""}`}
     </span>
   );
 }

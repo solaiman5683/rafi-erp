@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { Boxes, ClipboardList, GitMerge, Layers, Pencil, Plus, Save, Trash2, TriangleAlert } from "lucide-react";
+import { Boxes, ClipboardList, GitMerge, Info, Layers, Pencil, Plus, Save, Trash2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,10 +68,13 @@ export default function ProductForm() {
   const nav = useNavigate();
   const [params] = useSearchParams();
   const addMode = params.has("add");
+  // কোথা থেকে এসেছে: বিক্রির পাতা (সেভ হলে কার্টে যোগ) বা হোম (তথ্য বাকি থাকা পণ্য)
+  const from = params.get("from");
+  const backTo = from === "sell" ? "/sell" : from === "home" ? "/" : "/products";
   const { L, B, num } = useI18n();
   const categories = useCategories();
   const catalog = useCatalog();
-  const [p, setP] = useState<Partial<Product>>({ name: "", unit: "pcs", brand: "", note: "" });
+  const [p, setP] = useState<Partial<Product>>({ name: params.get("name") ?? "", unit: "pcs", brand: "", note: "" });
   const [rows, setRows] = useState<Row[]>([blankRow()]);
   // বেশিরভাগ পণ্যের অনেক সাইজ থাকে, তাই নতুন পণ্যে এটাই আগে বাছা থাকে
   const [multi, setMulti] = useState(true);
@@ -159,10 +162,11 @@ export default function ProductForm() {
 
   async function submit() {
     if (!p.name?.trim()) return toast.error(L("পণ্যের নাম লিখুন", "Enter product name"));
-    const list = multi ? rows.filter((r) => r.name.trim() || !r.isNew) : rows.slice(0, 1).map((r) => ({ ...r, name: "" }));
-    if (!list.length) return toast.error(L("অন্তত একটা সাইজ/ধরন দিন", "Add at least one variant"));
-    if (multi && list.some((r) => !r.name.trim())) return toast.error(L("প্রতিটা সাইজের নাম দিন", "Name every variant"));
-    if (list.some((r) => r.sell_price <= 0)) return toast.error(L("বিক্রি দাম দিন", "Enter sell price"));
+    let list = multi ? rows.filter((r) => r.name.trim() || !r.isNew) : rows.slice(0, 1).map((r) => ({ ...r, name: "" }));
+    // সাইজ না লিখলেও চলবে: একটা সাধারণ ধরন হিসেবে সেভ হবে
+    if (!list.length) list = rows.slice(0, 1).map((r) => ({ ...r, name: "" }));
+    if (list.length > 1 && list.some((r) => !r.name.trim())) return toast.error(L("প্রতিটা সাইজের নাম দিন", "Name every variant"));
+    // দাম বা স্টক না দিলেও সেভ হয় — হোম পেজের "তথ্য বাকি" তালিকায় পরে দেখাবে
     // পাইকারি দাম ফাঁকা থাকলে বিক্রি দামই পাইকারি দাম
     const drafts: VariantDraft[] = list.map(({ key: _k, isNew, ...r }) => ({
       ...r,
@@ -184,21 +188,30 @@ export default function ProductForm() {
           return;
         }
         await saveProduct(mergeTarget.product, [...old.map((v) => ({ ...v })), ...fresh]);
+        await done(mergeTarget.product.id, fresh.map((f) => f.name));
         toast.success(
           L(`আগের "${mergeTarget.product.name}" পণ্যে ${num(fresh.length)}টি সাইজ যোগ হয়েছে`, `Added ${fresh.length} size(s) to the existing "${mergeTarget.product.name}"`),
           skipped ? { description: L(`${num(skipped)}টি সাইজ আগেই ছিল, বাদ দেওয়া হয়েছে`, `${skipped} size(s) already existed and were skipped`) } : undefined,
         );
-        nav("/products");
         return;
       }
-      await saveProduct({ ...p, name: p.name.trim(), brand: brandExact ?? brandText, unit: p.unit ?? "pcs" } as Product, drafts);
+      const saved = await saveProduct({ ...p, name: p.name.trim(), brand: brandExact ?? brandText, unit: p.unit ?? "pcs" } as Product, drafts);
       toast.success(L("পণ্য সেভ হয়েছে", "Product saved"));
-      nav("/products");
+      await done(saved.id, drafts.filter((d) => !d.id).map((d) => d.name));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
     }
+  }
+
+  /** সেভের পর ফেরা; বিক্রির পাতা থেকে এলে নতুন সাইজটা কার্টে, অনেক সাইজ হলে সাইজ বাছাইয়ের ঘর খোলা অবস্থায় */
+  async function done(productId: string, newNames: string[]) {
+    if (from !== "sell") return nav(backTo);
+    const vs = (await db.variants.where("product_id").equals(productId).toArray()).filter((v) => !v.deleted);
+    const fresh = vs.filter((v) => newNames.some((n) => sameText(n, v.name)));
+    const one = fresh.length === 1 ? fresh[0] : vs.length === 1 ? vs[0] : null;
+    nav(one ? `/sell?add=${one.id}` : `/sell?pick=${productId}`);
   }
 
   if (!loaded) return null;
@@ -207,7 +220,7 @@ export default function ProductForm() {
   return (
     <div className="mx-auto max-w-4xl">
       <PageHeader
-        back="/products"
+        back={backTo}
         icon={Boxes}
         color="#ea580c"
         title={id ? L("পণ্য এডিট", "Edit product") : L("নতুন পণ্য", "New product")}
@@ -221,7 +234,7 @@ export default function ProductForm() {
               onConfirm={async () => {
                 await deleteProduct(id);
                 toast.success(L("মুছে ফেলা হয়েছে", "Deleted"));
-                nav("/products");
+                nav(backTo);
               }}
               trigger={
                 <Button variant="destructive">
@@ -232,6 +245,15 @@ export default function ProductForm() {
           )
         }
       />
+
+      {!id && (
+        <p className="mb-4 flex items-start gap-2 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">
+          <Info className="mt-0.5 size-4 shrink-0" />
+          {from === "sell"
+            ? L("শুধু নাম দিলেই হবে — সেভ করলে বিক্রির পাতায় ফিরে কার্টে যোগ হবে। দাম, স্টক পরে দিলেও চলবে।", "A name is enough — saving takes you back to the cart with it added. Price and stock can be added later.")
+            : L("শুধু নাম দিলেই সেভ হবে। দাম, স্টক পরে দিলেও চলবে — হোম পেজে মনে করিয়ে দেবে।", "A name is enough to save. Price and stock can be added later — the home page will remind you.")}
+        </p>
+      )}
 
       <div className="grid gap-5">
         <Card>
