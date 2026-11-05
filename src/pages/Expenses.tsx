@@ -256,7 +256,7 @@ export default function Expenses() {
                   <Input autoFocus value={editCat.name ?? ""} onChange={(e) => setEditCat({ ...editCat, name: e.target.value })} placeholder={L("যেমন: পানির বিল, দোকান পরিষ্কার", "e.g. Water bill, Cleaning")} />
                 </Field>
                 <Field label={L("আইকন", "Icon")}>
-                  <IconPicker value={editCat.icon} color={editCat.color} onChange={(icon) => setEditCat({ ...editCat, icon })} />
+                  <IconPicker first="general" value={editCat.icon} color={editCat.color} onChange={(icon) => setEditCat({ ...editCat, icon })} />
                 </Field>
                 <Field label={L("রং", "Color")}>
                   <div className="flex flex-wrap gap-2">

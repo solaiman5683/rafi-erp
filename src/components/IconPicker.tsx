@@ -37,28 +37,52 @@ function shrinkImage(file: File): Promise<string> {
 }
 
 /** বড় আইকন তালিকা (খোঁজা যায়) + নিজের ইমোজি বা ছবি */
-export function IconPicker({ value, onChange, color }: { value?: string; onChange: (icon: string) => void; color?: string }) {
+export function IconPicker({
+  value,
+  onChange,
+  color,
+  first = "shop",
+}: {
+  value?: string;
+  onChange: (icon: string) => void;
+  color?: string;
+  /** কোন দল আগে দেখাবে: পণ্যের ক্যাটাগরিতে দোকানের মাল, খরচে খরচের আইকন */
+  first?: "shop" | "general";
+}) {
   const { L } = useI18n();
   const [q, setQ] = useState("");
   const [emoji, setEmoji] = useState(value?.startsWith("emoji:") ? value.slice(6) : "");
   const fileRef = useRef<HTMLInputElement>(null);
+  const tile = (on: boolean) => cn("grid size-10 place-items-center rounded-lg border-2 transition", on ? "border-primary bg-primary/10" : "bg-white hover:border-primary/50");
   const list = useMemo(() => {
     const t = normalize(q);
-    if (!t) return ICON_LIST;
+    if (!t) return [];
     // পুরো শব্দ মিললে আগে, তারপর শুরুর অংশ; কিছুই না মিললে তবেই বানান-ভুল/উচ্চারণে খোঁজা
     const scored = ICON_LIST.map((i) => {
       const words = normalize(`${i.name} ${i.keywords}`).split(" ");
-      const s = words.includes(t) ? 3 : words.some((w) => w.startsWith(t)) ? 2 : 0;
+      // খোঁজার প্রতিটা শব্দ মিলতে হবে ("v bit" → শুধু ভি বিট)
+      const s = Math.min(...t.split(" ").map((p) => (words.includes(p) ? 3 : words.some((w) => w.startsWith(p)) ? 2 : 0)));
       return { i, s };
     })
       .filter((x) => x.s > 0)
       .sort((a, b) => b.s - a.s)
       .map((x) => x.i);
-    return scored.length ? scored : ICON_LIST.filter((i) => matchesText(`${i.name} ${i.keywords}`, q));
+    const found = scored.length ? scored : ICON_LIST.filter((i) => matchesText(`${i.name} ${i.keywords}`, q));
+    // একই আইকন দুই দলে থাকলে একবারই
+    return found.filter((i, idx) => found.findIndex((x) => x.name === i.name) === idx);
   }, [q]);
+  const groups = (first === "shop" ? (["shop", "general"] as const) : (["general", "shop"] as const)).map((g) => ({
+    g,
+    title: g === "shop" ? L("দোকানের মাল", "Shop items") : L("খরচ ও অন্যান্য", "Expenses & other"),
+    items: ICON_LIST.filter((i) => i.group === g),
+  }));
+  const searching = !!normalize(q);
+  const iconBtn = (ic: (typeof ICON_LIST)[number]) => (
+    <button key={`${ic.group}-${ic.name}`} type="button" title={ic.keywords} onClick={() => onChange(ic.name)} className={tile(value === ic.name)}>
+      <NamedIcon name={ic.name} className="size-5" style={{ color }} />
+    </button>
+  );
   const custom = value?.startsWith("emoji:") || value?.startsWith("img:");
-
-  const tile = (on: boolean) => cn("grid size-10 place-items-center rounded-lg border-2 transition", on ? "border-primary bg-primary/10" : "bg-white hover:border-primary/50");
 
   return (
     <div className="grid gap-2.5">
@@ -73,13 +97,20 @@ export function IconPicker({ value, onChange, color }: { value?: string; onChang
       </div>
 
       {/* ছোট নির্দিষ্ট মাপের ঘর — যত চওড়া জায়গা, এক সারিতে তত বেশি আইকন */}
-      <div className="grid max-h-52 grid-cols-[repeat(auto-fill,2.5rem)] justify-between gap-1.5 overflow-y-auto pr-1">
-        {list.map((ic) => (
-          <button key={ic.name} type="button" title={ic.keywords} onClick={() => onChange(ic.name)} className={tile(value === ic.name)}>
-            <NamedIcon name={ic.name} className="size-5" style={{ color }} />
-          </button>
-        ))}
-        {list.length === 0 && <p className="col-span-full py-4 text-center text-sm text-muted-foreground">{L("এই নামে আইকন নেই — নিচে নিজের ইমোজি বা ছবি দিন", "No icon found — use your own emoji or picture below")}</p>}
+      <div className="grid max-h-60 gap-2 overflow-y-auto pr-1">
+        {searching ? (
+          <div className="grid grid-cols-[repeat(auto-fill,2.5rem)] justify-between gap-1.5">
+            {list.map(iconBtn)}
+            {list.length === 0 && <p className="col-span-full py-4 text-center text-sm text-muted-foreground">{L("এই নামে আইকন নেই — নিচে নিজের ইমোজি বা ছবি দিন", "No icon found — use your own emoji or picture below")}</p>}
+          </div>
+        ) : (
+          groups.map(({ g, title, items }) => (
+            <div key={g} className="grid gap-1.5">
+              <p className="text-xs font-semibold text-muted-foreground">{title}</p>
+              <div className="grid grid-cols-[repeat(auto-fill,2.5rem)] justify-between gap-1.5">{items.map(iconBtn)}</div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* নিজের আইকন */}
