@@ -1,4 +1,4 @@
-import type { Customer, PayMethod } from "./types";
+import type { Customer, PayMethod, Settings } from "./types";
 
 /** [বাংলা, English] */
 export type BiText = readonly [string, string];
@@ -57,6 +57,34 @@ export const EXPENSE_CATEGORIES: { id: string; label: BiText; icon: string; colo
   { id: "other", label: ["অন্যান্য", "Other"], icon: "Receipt", color: "#64748b" },
 ];
 
+export interface ExpenseCategory {
+  id: string;
+  label: BiText;
+  icon: string;
+  color: string;
+  custom?: boolean;
+  deleted?: boolean;
+}
+
+export const EXPENSE_ICONS = [
+  "Receipt", "Store", "Users", "Lightbulb", "Zap", "Truck", "Fuel", "HardHat", "Coffee", "Smartphone",
+  "Wrench", "Cog", "Package", "Box", "Droplets", "Flame",
+];
+
+/** আগে থেকে থাকা খাত + মালিকের বানানো খাত ("অন্যান্য" সবসময় শেষে) */
+export function expenseCategories(s?: Settings): ExpenseCategory[] {
+  const custom: ExpenseCategory[] = (s?.expense_categories ?? []).map((c) => ({
+    id: c.id,
+    label: [c.name, c.name] as const,
+    icon: c.icon,
+    color: c.color,
+    custom: true,
+    deleted: !!c.deleted,
+  }));
+  const other = EXPENSE_CATEGORIES[EXPENSE_CATEGORIES.length - 1];
+  return [...EXPENSE_CATEGORIES.slice(0, -1), ...custom, other];
+}
+
 /** নবাবপুরের হার্ডওয়্যার দোকানের জন্য শুরুর ক্যাটাগরি */
 export const DEFAULT_CATEGORIES: { name: string; name_en: string; icon: string; color: string }[] = [
   { name: "পাইপ ও ফিটিংস", name_en: "Pipes & Fittings", icon: "Cylinder", color: "#0284c7" },
@@ -82,6 +110,9 @@ export const CATEGORY_COLORS = [
 ];
 
 /** হার্ডওয়্যারে বেশি চলা সাইজ — নতুন পণ্যের সাইজের ঘরের নিচে সাজেশন হিসেবে আসে */
+/** কম স্টক সতর্কতার ডিফল্ট সীমা (সেটিংস থেকে বদলানো যায়) */
+export const DEFAULT_LOW_STOCK = 5;
+
 export const COMMON_SIZES = ['⅛"', '¼"', '⅜"', '½"', '⅝"', '¾"', '1"', '1¼"', '1½"', '2"', '2½"', '3"', '4"', '6"', '8"'];
 
 export const WALK_IN: BiText = ["সাধারণ ক্রেতা", "Walk-in customer"];

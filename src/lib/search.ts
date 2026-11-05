@@ -36,6 +36,24 @@ function normalizeWithMap(text: string): { norm: string; map: number[]; source: 
 
 export const normalize = (text: string) => normalizeWithMap(text).norm.replace(/\s+/g, " ").trim();
 
+const GLYPH: Record<string, string> = Object.fromEntries(Object.entries(FRACTIONS).map(([g, f]) => [f, g]));
+
+/**
+ * লেখা সাইজকে সুন্দর ইঞ্চি রূপে: "3/4" → ¾", "1 1/4" / "1-1/4" → 1¼", "2" → 2", "১/২ ইঞ্চি" → ½"
+ * সাইজ না হলে (যেমন "10mm", "লাল") null
+ */
+export function prettySize(text: string): string | null {
+  const t = normalize(text).replace(/(inches|inch|in|ইঞ্চি|ইঞ্চ)$/, "").trim();
+  let m = t.match(/^(?:(\d+)\s*[- ]\s*)?(\d+)\/(\d+)$/);
+  if (m) {
+    const g = GLYPH[`${m[2]}/${m[3]}`];
+    const frac = g ?? `${m[2]}/${m[3]}`;
+    return m[1] ? `${m[1]}${g ? "" : " "}${frac}"` : `${frac}"`;
+  }
+  m = t.match(/^\d+(?:\.\d+)?$/);
+  return m ? `${m[0]}"` : null;
+}
+
 /** সাইজ মেলানোর জন্য: ইউনিট ও ফাঁকা বাদ — `1"`, `1 inch`, `1inch` সব "1" */
 const sizeKey = (s: string) => normalize(s).replace(/(inches|inch|ইঞ্চি)/g, "").replace(/\s+/g, "");
 
@@ -51,6 +69,8 @@ function skeleton(word: string): string {
   let out = "";
   let last = -2;
   const w = word
+    // ড়/ঢ় উচ্চারণে "র" (যুক্ত ও আলাদা দুই রূপই)
+    .replace(/[ড়ঢ়]|[ডঢ]়/g, "র")
     .replace(/ph/g, "f")
     .replace(/ch/g, "C")
     .replace(/sh/g, "s")
@@ -62,6 +82,8 @@ function skeleton(word: string): string {
   for (let i = 0; i < w.length; i++) {
     const ch = w[i];
     let c = "";
+    // য-ফলা (্য) উচ্চারণে স্বরের মতো: হ্যাঙ্গার ↔ hanger, ক্যাবল ↔ cable
+    if (ch === "য" && w[i - 1] === "্") continue;
     if (BN_PHONETIC[ch]) c = BN_PHONETIC[ch];
     else if (/[bdfgjklmnprst]/.test(ch)) c = ch;
     else if (ch === "C") c = "c";
@@ -73,7 +95,8 @@ function skeleton(word: string): string {
     if (!(adjacent && out.endsWith(c))) out += c;
     last = i;
   }
-  return out;
+  // "ng" আর "n" একই ধরা: rong ↔ রং, bangla ↔ বাংলা, hanger ↔ হ্যাঙ্গার
+  return out.replace(/ng/g, "n");
 }
 
 /** Damerau-Levenshtein; max পেরোলে আগেই থামে */
@@ -140,6 +163,8 @@ function scoreToken(token: string, f: Field): number {
       if (hasDigit(w)) continue;
       const wk = skeleton(w);
       if (wk === sk || (sk.length >= 4 && editDistance(sk, wk, 1) <= 1)) return TIER.sound;
+      // অর্ধেক লেখা অবস্থাতেই মেলানো: "scre" → স্ক্রু (অন্তত ৩টা ব্যঞ্জন লাগে)
+      if (sk.length >= 3 && token.length >= 4 && wk.startsWith(sk)) return TIER.sound - 3;
     }
   }
   return 0;

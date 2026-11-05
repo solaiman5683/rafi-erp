@@ -90,12 +90,12 @@ export function StatCard({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className="flex items-center gap-3 rounded-2xl border bg-card p-4 text-left shadow-xs transition enabled:hover:-translate-y-0.5 enabled:hover:shadow-md disabled:cursor-default"
+      className="relative flex items-center overflow-hidden rounded-2xl border bg-card p-4 text-left shadow-xs transition enabled:hover:-translate-y-0.5 enabled:hover:shadow-md disabled:cursor-default"
     >
-      <span className="grid size-12 shrink-0 place-items-center rounded-xl" style={{ backgroundColor: `${color}1a`, color }}>
-        <Icon className="size-6" strokeWidth={2.2} />
-      </span>
-      <span className="min-w-0">
+      {/* নিচের ডান কোণে হালকা রঙের গোল, তার ওপর আইকন — লেখার পেছনে বসে, আলাদা জায়গা নেয় না */}
+      <span aria-hidden className="pointer-events-none absolute -right-6 -bottom-6 size-24 rounded-full" style={{ backgroundColor: `${color}14` }} />
+      <Icon aria-hidden className="pointer-events-none absolute right-3 bottom-3 size-7 opacity-60" style={{ color }} strokeWidth={2} />
+      <span className="relative min-w-0">
         <span className="line-clamp-2 block text-sm leading-tight text-muted-foreground">{label}</span>
         <span className="tabular block truncate text-xl font-bold">{value}</span>
         {hint && <span className="block truncate text-xs text-muted-foreground">{hint}</span>}

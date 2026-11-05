@@ -1,4 +1,4 @@
-import { EXPENSE_CATEGORIES, UNITS, WALK_IN, type BiText } from "./constants";
+import { expenseCategories, UNITS, WALK_IN, type BiText } from "./constants";
 import { db } from "./db";
 import { cashLabel } from "./labels";
 import { cashBook, summaryFor } from "./reports";
@@ -64,10 +64,11 @@ export async function buildReport(tab: ReportTab, from: string, to: string, f: F
 
   if (tab === "summary") {
     const s = await summaryFor(from, to);
+    const expCats = expenseCategories(await db.settings.get("shop"));
     const row = (bn: string, en: string, v: number) => [L(bn, en), v];
     const expenseRows = Object.entries(s.expenseByCat)
       .sort((a, b) => b[1] - a[1])
-      .map(([id, v]) => [`   ${L("খরচ", "Expense")}: ${B(EXPENSE_CATEGORIES.find((c) => c.id === id)?.label) || id}`, v]);
+      .map(([id, v]) => [`   ${L("খরচ", "Expense")}: ${B(expCats.find((c) => c.id === id)?.label) || id}`, v]);
     return {
       title: L("লাভ-ক্ষতির হিসাব", "Profit & loss"),
       columns: [{ label: L("বিবরণ", "Item") }, { label: L("টাকা", "Amount"), kind: "money" }],

@@ -27,7 +27,9 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmAction, Field, PageHeader } from "@/components/common";
+import { NumInput } from "@/components/NumInput";
 import { Chips } from "@/components/PartyForms";
+import { DEFAULT_LOW_STOCK } from "@/lib/constants";
 import { isValidSecret, SecretInput } from "@/components/SecretInput";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -94,6 +96,9 @@ function ShopCard() {
         </div>
         <Field label={L("মেমোর নিচের লেখা", "Memo footer note")}>
           <Textarea rows={2} value={f.invoice_note ?? ""} onChange={(e) => set("invoice_note", e.target.value)} placeholder={L("যেমন: বিক্রিত মাল ফেরত নেওয়া হয় না। ধন্যবাদ।", "e.g. Thank you for your business")} />
+        </Field>
+        <Field label={L("কম স্টক সতর্কতা (সব পণ্যের জন্য)", "Low stock alert (all products)")} hint={L("স্টক এই সংখ্যা বা তার কম হলে লাল দেখাবে", "Shown in red when stock is at or below this")}>
+          <NumInput className="max-w-40" value={f.low_stock ?? DEFAULT_LOW_STOCK} allowEmpty={false} onValueChange={(n) => setF((p) => ({ ...p, low_stock: Math.max(0, n) }))} />
         </Field>
         <Field label={L("মেমোর কাগজ", "Memo paper size")}>
           <Chips value={f.paper ?? "A5"} onChange={(v) => setF((p) => ({ ...p, paper: v }))} options={[{ id: "A5", label: "A5" }, { id: "A4", label: "A4" }]} />

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { Boxes, Layers, Pencil, Plus, Save, Sparkles, Trash2, TriangleAlert } from "lucide-react";
+import { Boxes, ClipboardList, GitMerge, Layers, Pencil, Plus, Save, Trash2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,30 +12,44 @@ import { ConfirmAction, Field, PageHeader } from "@/components/common";
 import { Highlight } from "@/components/Highlight";
 import { IconTile, NamedIcon } from "@/components/Icon";
 import { NumInput } from "@/components/NumInput";
-import { COMMON_SIZES, UNITS } from "@/lib/constants";
+import { StockDialog, type StockTarget } from "@/components/StockDialog";
+import { CATEGORY_COLORS, CATEGORY_ICONS, COMMON_SIZES, UNITS } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { useCatalog, useCategories } from "@/lib/hooks";
-import { matchesText, normalize, sameText, searchCatalog } from "@/lib/search";
+import { matchesText, normalize, prettySize, sameText, searchCatalog } from "@/lib/search";
 import { useI18n } from "@/lib/i18n";
-import { deleteProduct, newId, saveProduct, type VariantDraft } from "@/lib/ops";
-import type { Product } from "@/lib/types";
+import { deleteProduct, newId, saveCategory, saveProduct, type VariantDraft } from "@/lib/ops";
+import type { Category, Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 type Row = VariantDraft & { key: string; isNew: boolean };
 
-const blankRow = (name = ""): Row => ({ key: newId(), name, buy_price: 0, sell_price: 0, wholesale_price: 0, low_stock: 0, opening: 0, sku: "", isNew: true });
+const blankRow = (name = ""): Row => ({ key: newId(), name, buy_price: 0, sell_price: 0, wholesale_price: 0, opening: 0, isNew: true });
 
 const QUICK_UNITS = ["pcs", "kg", "feet", "meter", "gauge", "box", "coil", "set", "liter"];
 
-/** সাধারণ ইঞ্চি সাইজ — সবসময় দেখা যায়, চাপ দিলে সাইজের ঘরে চলে যায়; অন্য সারিতে নেওয়া সাইজ বন্ধ থাকে */
-function SizeChips({ onPick, isOn, isUsed }: { onPick: (s: string) => void; isOn: (s: string) => boolean; isUsed?: (s: string) => boolean }) {
+/** সাইজের মান (সাজানোর জন্য): ¾" → 0.75, 1¼" → 1.25; সংখ্যা না থাকলে শেষে */
+function sizeValue(s: string): number {
+  const t = normalize(s);
+  let m = t.match(/^(\d+)\s+(\d+)\/(\d+)/);
+  if (m) return Number(m[1]) + Number(m[2]) / Number(m[3]);
+  m = t.match(/^(\d+)\/(\d+)/);
+  if (m) return Number(m[1]) / Number(m[2]);
+  m = t.match(/^\d+(?:\.\d+)?/);
+  return m ? Number(m[0]) : Infinity;
+}
+
+/** সাইজের ঘরে চাপ দিলে আগে দেওয়া সাইজগুলো দেখায়; চাপ দিলে ঘরে চলে যায়, অন্য সারিতে নেওয়া সাইজ বন্ধ থাকে */
+function SizeChips({ sizes, onPick, isOn, isUsed }: { sizes: string[]; onPick: (s: string) => void; isOn: (s: string) => boolean; isUsed?: (s: string) => boolean }) {
   return (
-    <div className="mt-1 flex flex-wrap gap-1.5">
-      {COMMON_SIZES.map((s) => (
+    <div className="mt-1 flex max-h-40 flex-wrap gap-1.5 overflow-y-auto">
+      {sizes.map((s) => (
         <button
           key={s}
           type="button"
           disabled={isUsed?.(s)}
+          // ঘর থেকে ফোকাস না সরিয়ে বাছাই
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => onPick(s)}
           className={cn(
             "h-9 min-w-11 rounded-lg border-2 px-2 text-base font-semibold disabled:opacity-35",
@@ -58,8 +73,12 @@ export default function ProductForm() {
   const catalog = useCatalog();
   const [p, setP] = useState<Partial<Product>>({ name: "", unit: "pcs", brand: "", note: "" });
   const [rows, setRows] = useState<Row[]>([blankRow()]);
-  const [multi, setMulti] = useState(false);
-  const [bulk, setBulk] = useState("");
+  // বেশিরভাগ পণ্যের অনেক সাইজ থাকে, তাই নতুন পণ্যে এটাই আগে বাছা থাকে
+  const [multi, setMulti] = useState(true);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
+  const [nameFocus, setNameFocus] = useState(!id);
+  const [adjust, setAdjust] = useState<StockTarget | null>(null);
+  const [newCat, setNewCat] = useState<Partial<Category> | null>(null);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(!id);
 
@@ -109,37 +128,70 @@ export default function ProductForm() {
       .slice(0, 6);
   }, [catalog, id, nameText]);
   const sameName = nameHits.filter((i) => sameText(i.product.name, nameText));
-  const exactDuplicate = sameName.find((i) => sameText(i.product.brand ?? "", brandText));
+  // নাম, ব্র্যান্ড ও ক্যাটাগরি সব মিললে নতুন পণ্য না হয়ে আগেরটাতেই সাইজ হিসেবে যোগ হবে
+  const mergeTarget = id
+    ? undefined
+    : (catalog ?? []).find((i) => sameText(i.product.name, nameText) && sameText(i.product.brand ?? "", brandText) && (i.product.category_id ?? "") === (p.category_id ?? ""));
+
+  // আগের সব পণ্যে দেওয়া সাইজ (ছোট থেকে বড়); কিছু না থাকলে সাধারণ ইঞ্চি সাইজ
+  const knownSizes = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of catalog ?? []) for (const v of c.variants) if (v.name.trim() && !m.has(normalize(v.name))) m.set(normalize(v.name), v.name.trim());
+    const list = [...m.values()];
+    if (!list.length) return COMMON_SIZES;
+    return list.sort((a, b) => sizeValue(a) - sizeValue(b) || a.localeCompare(b));
+  }, [catalog]);
+  const sizesFor = (typed: string) => {
+    const t = typed.trim();
+    if (!t) return knownSizes;
+    // "3/4" লিখলে ¾", "1 1/4" লিখলে 1¼" — সুন্দর রূপটা সবার আগে
+    const pretty = prettySize(t);
+    const rest = pretty ? knownSizes.filter((s) => normalize(s) !== normalize(pretty)) : knownSizes;
+    // লেখার সাথে মেলে এমনগুলো আগে, বাকিগুলোও থাকে
+    const hit = rest.filter((s) => matchesText(s, t));
+    return [...(pretty && pretty !== t ? [pretty] : []), ...hit, ...rest.filter((s) => !hit.includes(s))];
+  };
+
+  // এডিটের সময় এই পণ্যের সাইজগুলোর এখনকার স্টক (স্টক ঠিক করার জন্য)
+  const thisItem = id ? catalog?.find((i) => i.product.id === id) : undefined;
 
   const setRow = (key: string, patch: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
 
-  function applyBulk() {
-    const names = bulk
-      .split(/[,،\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (!names.length) return;
-    const tpl = rows[rows.length - 1];
-    setRows((rs) => [
-      ...rs.filter((r) => r.name || !r.isNew),
-      ...names.map((n) => ({ ...blankRow(n), buy_price: tpl?.buy_price ?? 0, sell_price: tpl?.sell_price ?? 0, wholesale_price: tpl?.wholesale_price ?? 0 })),
-    ]);
-    setBulk("");
-  }
-
   async function submit() {
     if (!p.name?.trim()) return toast.error(L("পণ্যের নাম লিখুন", "Enter product name"));
-    if (exactDuplicate) return toast.error(L("একই নাম ও ব্র্যান্ডের পণ্য আগেই আছে — ওটায় সাইজ যোগ করুন", "This product already exists — add a size to it"));
     const list = multi ? rows.filter((r) => r.name.trim() || !r.isNew) : rows.slice(0, 1).map((r) => ({ ...r, name: "" }));
     if (!list.length) return toast.error(L("অন্তত একটা সাইজ/ধরন দিন", "Add at least one variant"));
     if (multi && list.some((r) => !r.name.trim())) return toast.error(L("প্রতিটা সাইজের নাম দিন", "Name every variant"));
     if (list.some((r) => r.sell_price <= 0)) return toast.error(L("বিক্রি দাম দিন", "Enter sell price"));
+    // পাইকারি দাম ফাঁকা থাকলে বিক্রি দামই পাইকারি দাম
+    const drafts: VariantDraft[] = list.map(({ key: _k, isNew, ...r }) => ({
+      ...r,
+      id: isNew ? undefined : r.id,
+      name: r.name.trim(),
+      wholesale_price: r.wholesale_price && r.wholesale_price > 0 ? r.wholesale_price : r.sell_price,
+      opening: isNew ? r.opening : undefined,
+    }));
     setBusy(true);
     try {
-      await saveProduct(
-        { ...p, name: p.name.trim(), brand: brandExact ?? brandText, unit: p.unit ?? "pcs" } as Product,
-        list.map(({ key: _k, isNew, ...r }) => ({ ...r, id: isNew ? undefined : r.id, name: r.name.trim(), opening: isNew ? r.opening : undefined })),
-      );
+      if (mergeTarget) {
+        const old = (await db.variants.where("product_id").equals(mergeTarget.product.id).toArray())
+          .filter((v) => !v.deleted)
+          .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+        const fresh = drafts.filter((d) => !old.some((v) => sameText(v.name, d.name)));
+        const skipped = drafts.length - fresh.length;
+        if (!fresh.length) {
+          toast.error(L("এই সব সাইজ ওই পণ্যে আগেই আছে", "All these sizes already exist on that product"));
+          return;
+        }
+        await saveProduct(mergeTarget.product, [...old.map((v) => ({ ...v })), ...fresh]);
+        toast.success(
+          L(`আগের "${mergeTarget.product.name}" পণ্যে ${num(fresh.length)}টি সাইজ যোগ হয়েছে`, `Added ${fresh.length} size(s) to the existing "${mergeTarget.product.name}"`),
+          skipped ? { description: L(`${num(skipped)}টি সাইজ আগেই ছিল, বাদ দেওয়া হয়েছে`, `${skipped} size(s) already existed and were skipped`) } : undefined,
+        );
+        nav("/products");
+        return;
+      }
+      await saveProduct({ ...p, name: p.name.trim(), brand: brandExact ?? brandText, unit: p.unit ?? "pcs" } as Product, drafts);
       toast.success(L("পণ্য সেভ হয়েছে", "Product saved"));
       nav("/products");
     } catch (e) {
@@ -185,22 +237,29 @@ export default function ProductForm() {
         <Card>
           <CardContent className="grid gap-4">
             <Field label={L("পণ্যের নাম *", "Product name *")}>
-              <Input autoFocus={!id} value={p.name ?? ""} onChange={(e) => setP({ ...p, name: e.target.value })} placeholder={L("যেমন: জিআই পাইপ, পিভিসি এলবো, তালা", "e.g. GI Pipe, PVC Elbow")} />
-              {nameHits.length > 0 && (
-                <div className="grid gap-2 rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-2.5">
+              <Input autoFocus={!id} value={p.name ?? ""} onFocus={() => setNameFocus(true)} onBlur={() => setNameFocus(false)} onChange={(e) => setP({ ...p, name: e.target.value })} placeholder={L("যেমন: জিআই পাইপ, পিভিসি এলবো, তালা", "e.g. GI Pipe, PVC Elbow")} />
+              {nameFocus && nameHits.length > 0 && (
+                // ঘর থেকে বের হলে লুকায়; তালিকায় চাপ দিলে ফোকাস ঘরেই থাকে
+                <div className="grid gap-2 rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-2.5" onMouseDown={(e) => e.preventDefault()}>
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-900">
                     <TriangleAlert className="size-4 shrink-0" />
                     {sameName.length
                       ? L("এই নামে পণ্য আগেই আছে! নতুন না বানিয়ে ওটাতেই সাইজ যোগ করুন", "A product with this name exists! Add a size to it instead")
                       : L("এই রকম নামের পণ্য আগে থেকে আছে — একই হলে ওটাতেই সাইজ যোগ করুন", "Similar products exist — if it's the same, add a size to it")}
                   </p>
+                  <p className="text-xs text-amber-900/80">{L("নামে চাপ দিলে নামটা ঘরে বসবে", "Tap a name to use it")}</p>
                   {nameHits.map((i) => (
                     <div key={i.product.id} className="flex items-center gap-2.5 rounded-xl bg-white p-2">
                       <IconTile name={i.category?.icon} color={i.category?.color} size="sm" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold">
+                        <button
+                          type="button"
+                          className="block max-w-full truncate text-left font-semibold underline-offset-2 hover:text-primary hover:underline"
+                          title={L("এই নামটা নিন", "Use this name")}
+                          onClick={() => setP({ ...p, name: i.product.name })}
+                        >
                           <Highlight text={i.product.name} q={nameText} />
-                        </p>
+                        </button>
                         <p className="truncate text-xs text-muted-foreground">
                           {[i.product.brand, i.category && B([i.category.name, i.category.name_en || i.category.name]), `${num(i.variants.length)} ${L("সাইজ", "sizes")}`].filter(Boolean).join(" · ")}
                         </p>
@@ -227,6 +286,13 @@ export default function ProductForm() {
                     {B([c.name, c.name_en || c.name])}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setNewCat({ icon: "Package", color: CATEGORY_COLORS[0] })}
+                  className="flex h-10 items-center gap-1.5 rounded-full border-2 border-dashed px-3 text-sm font-semibold text-muted-foreground hover:border-primary hover:text-primary"
+                >
+                  <Plus className="size-4" /> {L("নতুন ক্যাটাগরি", "New category")}
+                </button>
               </div>
             </Field>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -294,48 +360,45 @@ export default function ProductForm() {
               </button>
             </div>
 
-            {multi && (
-              <div className="rounded-2xl border-2 border-dashed border-orange-300 bg-orange-50/60 p-3">
-                <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-orange-900">
-                  <Sparkles className="size-4" />
-                  {L("একসাথে অনেক সাইজ লিখুন, কমা দিয়ে আলাদা করে", "Type many sizes at once, separated by commas")}
-                </p>
-                <div className="flex gap-2">
-                  <Input value={bulk} onChange={(e) => setBulk(e.target.value)} placeholder='½", ¾", 1", 1¼", 1½"' onKeyDown={(e) => e.key === "Enter" && applyBulk()} />
-                  <Button onClick={applyBulk} variant="secondary">
-                    <Plus /> {L("যোগ", "Add")}
-                  </Button>
-                </div>
-                <SizeChips
-                  isOn={(s) => bulk.split(",").map(normalize).includes(normalize(s))}
-                  onPick={(s) => setBulk((b) => (b.trim() ? `${b.trim().replace(/,$/, "")}, ${s}` : s))}
-                />
-              </div>
+            {mergeTarget && (
+              <p className="flex items-start gap-2 rounded-2xl border-2 border-sky-300 bg-sky-50 p-3 text-sm font-semibold text-sky-900">
+                <GitMerge className="mt-0.5 size-4 shrink-0" />
+                {L(
+                  `নাম, ব্র্যান্ড ও ক্যাটাগরি মিলে গেছে — সেভ করলে নতুন পণ্য হবে না, আগের "${mergeTarget.product.name}" পণ্যে সাইজ হিসেবে যোগ হবে।`,
+                  `Name, brand and category match — saving adds these as sizes to the existing "${mergeTarget.product.name}" instead of a new product.`,
+                )}
+              </p>
             )}
 
             <div className="grid gap-3">
               {(multi ? rows : rows.slice(0, 1)).map((r) => (
-                <div key={r.key} className="grid gap-3 rounded-2xl border bg-white p-3 sm:grid-cols-12">
+                <div key={r.key} className="relative grid gap-3 rounded-2xl border bg-white p-3 sm:grid-cols-12">
                   {multi && (
-                    <Field label={L("সাইজ / ধরন", "Size / type")} className="sm:col-span-11">
+                    <Field label={L("সাইজ / ধরন", "Size / type")} className="sm:col-span-12">
                       <Input
                         autoFocus={addMode && r.isNew}
                         value={r.name}
+                        onFocus={() => setFocusKey(r.key)}
+                        onBlur={() => setFocusKey((k) => (k === r.key ? null : k))}
                         onChange={(e) => setRow(r.key, { name: e.target.value })}
                         placeholder={`${L("যেমন", "e.g.")} ½"`}
                       />
-                      <SizeChips
-                        isOn={(s) => normalize(r.name) === normalize(s)}
+                      {focusKey === r.key && (
+                        <SizeChips
+                          sizes={sizesFor(r.name)}
+                          isOn={(s) => normalize(r.name) === normalize(s)}
                         isUsed={(s) => rows.some((x) => x.key !== r.key && normalize(x.name) === normalize(s))}
-                        onPick={(s) => setRow(r.key, { name: s })}
-                      />
+                          onPick={(s) => setRow(r.key, { name: s })}
+                        />
+                      )}
                     </Field>
                   )}
                   {multi && (
-                    <div className="flex items-start justify-end sm:col-span-1 sm:pt-6">
+                    // সারির একদম ওপরের ডান কোণে
+                    <div className="absolute top-1.5 right-1.5">
                       <Button
                         variant="ghost"
-                        size="icon"
+                        size="icon-sm"
                         className="text-red-600"
                         disabled={rows.length === 1}
                         onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
@@ -345,6 +408,34 @@ export default function ProductForm() {
                       </Button>
                     </div>
                   )}
+                  {r.isNew ? (
+                    <Field label={L("এখন স্টকে কত?", "Stock now")} className="sm:col-span-3">
+                      <NumInput value={r.opening ?? 0} onValueChange={(n) => setRow(r.key, { opening: n })} suffix={unitLabel} />
+                    </Field>
+                  ) : (
+                    (() => {
+                      const v = thisItem?.variants.find((x) => x.id === r.id);
+                      return (
+                        <Field label={L("এখন স্টকে", "In stock")} className="sm:col-span-3">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-11 justify-between gap-2 px-3"
+                            disabled={!v}
+                            onClick={() => thisItem && v && setAdjust({ item: thisItem, v })}
+                            title={L("স্টক ঠিক করুন", "Adjust stock")}
+                          >
+                            <span className="tabular text-base font-bold">
+                              {num(v?.stock ?? 0)} <span className="text-xs font-normal text-muted-foreground">{unitLabel}</span>
+                            </span>
+                            <span className="flex items-center gap-1 text-sm text-primary">
+                              <ClipboardList className="size-4" /> {L("স্টক ঠিক করুন", "Adjust")}
+                            </span>
+                          </Button>
+                        </Field>
+                      );
+                    })()
+                  )}
                   <Field label={L(`কেনা দাম /${unitLabel}`, `Buy /${unitLabel}`)} className="sm:col-span-3">
                     <NumInput value={r.buy_price} onValueChange={(n) => setRow(r.key, { buy_price: n })} prefix="৳" />
                   </Field>
@@ -352,22 +443,7 @@ export default function ProductForm() {
                     <NumInput value={r.sell_price} onValueChange={(n) => setRow(r.key, { sell_price: n })} prefix="৳" />
                   </Field>
                   <Field label={L("পাইকারি দাম", "Wholesale")} className="sm:col-span-3">
-                    <NumInput value={r.wholesale_price ?? 0} onValueChange={(n) => setRow(r.key, { wholesale_price: n })} prefix="৳" />
-                  </Field>
-                  {r.isNew ? (
-                    <Field label={L("এখন স্টকে কত?", "Stock now")} className="sm:col-span-3">
-                      <NumInput value={r.opening ?? 0} onValueChange={(n) => setRow(r.key, { opening: n })} suffix={unitLabel} />
-                    </Field>
-                  ) : (
-                    <div className={"text-xs text-muted-foreground sm:col-span-3 sm:self-end sm:pb-3"}>
-                      {L("স্টক বদলাতে পণ্য তালিকায় 'স্টক ঠিক করুন' চাপুন", "Use 'Adjust stock' on the products list")}
-                    </div>
-                  )}
-                  <Field label={L("কম স্টক সতর্কতা", "Low stock alert")} className={multi ? "sm:col-span-3" : "sm:col-span-6"}>
-                    <NumInput value={r.low_stock ?? 0} onValueChange={(n) => setRow(r.key, { low_stock: n })} suffix={unitLabel} />
-                  </Field>
-                  <Field label={L("কোড / বারকোড (ইচ্ছা হলে)", "Code / barcode (optional)")} className={multi ? "sm:col-span-9" : "sm:col-span-6"}>
-                    <Input value={r.sku ?? ""} onChange={(e) => setRow(r.key, { sku: e.target.value })} />
+                    <NumInput value={r.wholesale_price ?? 0} onValueChange={(n) => setRow(r.key, { wholesale_price: n })} prefix="৳" placeholder={L("ফাঁকা = বিক্রি দাম", "Empty = sell price")} />
                   </Field>
                 </div>
               ))}
@@ -387,6 +463,78 @@ export default function ProductForm() {
             </Field>
           </CardContent>
         </Card>
+
+        <StockDialog target={adjust} onClose={() => setAdjust(null)} />
+
+        <Dialog open={!!newCat} onOpenChange={(v) => !v && setNewCat(null)}>
+          <DialogContent className="max-h-[92dvh] overflow-y-auto">
+            {newCat && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-3 text-xl">
+                    <IconTile name={newCat.icon} color={newCat.color} size="sm" />
+                    {L("নতুন ক্যাটাগরি", "New category")}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4">
+                  <Field label={L("নাম (বাংলা)", "Name (Bangla)")}>
+                    <Input autoFocus value={newCat.name ?? ""} onChange={(e) => setNewCat({ ...newCat, name: e.target.value })} placeholder={L("যেমন: সিএনসি বিট", "e.g. CNC Bit")} />
+                  </Field>
+                  <Field label={L("নাম (ইংরেজি, ইচ্ছা হলে)", "Name (English, optional)")}>
+                    <Input value={newCat.name_en ?? ""} onChange={(e) => setNewCat({ ...newCat, name_en: e.target.value })} />
+                  </Field>
+                  <Field label={L("আইকন", "Icon")}>
+                    <div className="grid grid-cols-8 gap-1.5">
+                      {CATEGORY_ICONS.map((ic) => (
+                        <button
+                          key={ic}
+                          type="button"
+                          onClick={() => setNewCat({ ...newCat, icon: ic })}
+                          className={cn("grid aspect-square place-items-center rounded-lg border-2", newCat.icon === ic ? "border-primary bg-primary/10" : "bg-white")}
+                        >
+                          <NamedIcon name={ic} className="size-5" style={{ color: newCat.color }} />
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                  <Field label={L("রং", "Color")}>
+                    <div className="flex flex-wrap gap-2">
+                      {CATEGORY_COLORS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setNewCat({ ...newCat, color: c })}
+                          className={cn("size-9 rounded-full ring-offset-2", newCat.color === c && "ring-2 ring-foreground")}
+                          style={{ backgroundColor: c }}
+                          aria-label={c}
+                        />
+                      ))}
+                    </div>
+                  </Field>
+                </div>
+                <DialogFooter>
+                  <Button
+                    size="lg"
+                    className="w-full"
+                    onClick={async () => {
+                      const name = newCat.name?.trim();
+                      if (!name) return toast.error(L("নাম লিখুন", "Enter a name"));
+                      if (categories.some((c) => sameText(c.name, name) || (!!c.name_en && sameText(c.name_en, name))))
+                        return toast.error(L("এই নামে ক্যাটাগরি আগেই আছে", "This category already exists"));
+                      const saved = await saveCategory({ ...newCat, name, name_en: newCat.name_en?.trim() || undefined } as Category);
+                      // নতুন ক্যাটাগরিটাই এই পণ্যের জন্য বাছা হয়ে যায়
+                      setP((cur) => ({ ...cur, category_id: saved.id }));
+                      setNewCat(null);
+                      toast.success(L("ক্যাটাগরি যোগ হয়েছে", "Category added"));
+                    }}
+                  >
+                    <Save /> {L("সেভ করুন", "Save")}
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <Button size="lg" className="h-14 text-lg" disabled={busy} onClick={() => void submit()}>
           <Save /> {L("পণ্য সেভ করুন", "Save product")}

@@ -132,8 +132,17 @@ export default function Products() {
           onClick={() => setLowOnly((v) => !v)}
           hint={L("চাপ দিলে শুধু এগুলো দেখাবে", "Tap to filter")}
         />
-        {isOwner && <StatCard icon={PackageSearch} color="#2563eb" label={L("স্টকের দাম (কেনা)", "Stock value (cost)")} value={money(stats.value)} />}
-        {isOwner && <StatCard icon={PackageSearch} color="#16a34a" label={L("স্টকের দাম (বিক্রি)", "Stock value (sale)")} value={money(stats.saleValue)} />}
+        {/* মোবাইলে টাকার অঙ্ক কাটা না যেতে পুরো চওড়া */}
+        {isOwner && (
+          <div className="col-span-2 grid lg:col-span-1">
+            <StatCard icon={PackageSearch} color="#2563eb" label={L("স্টকের দাম (কেনা)", "Stock value (cost)")} value={money(stats.value)} />
+          </div>
+        )}
+        {isOwner && (
+          <div className="col-span-2 grid lg:col-span-1">
+            <StatCard icon={PackageSearch} color="#16a34a" label={L("স্টকের দাম (বিক্রি)", "Stock value (sale)")} value={money(stats.saleValue)} />
+          </div>
+        )}
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">

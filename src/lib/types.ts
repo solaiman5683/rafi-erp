@@ -26,6 +26,19 @@ export interface Settings extends Base {
   phone2?: string;
   invoice_note?: string;
   paper?: "A4" | "A5";
+  /** সব পণ্যের জন্য একটাই কম-স্টক সীমা */
+  low_stock?: number;
+  /** মালিকের বানানো খরচের খাত */
+  expense_categories?: CustomExpenseCategory[];
+}
+
+export interface CustomExpenseCategory {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  /** মুছে ফেলা খাত — পুরোনো খরচে নাম দেখাতে রেখে দেওয়া হয় */
+  deleted?: 0 | 1;
 }
 
 export interface Category extends Base {

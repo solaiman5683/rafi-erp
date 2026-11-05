@@ -16,8 +16,8 @@ import { NumInput } from "@/components/NumInput";
 import { Pager, usePaged } from "@/components/Pager";
 import { PayMethodPicker } from "@/components/PayMethodPicker";
 import { DailyBarChart } from "@/components/SalesChart";
-import { EXPENSE_CATEGORIES, PAY_METHODS, UNITS } from "@/lib/constants";
-import { useCatalog, useCustomers, useSuppliers } from "@/lib/hooks";
+import { PAY_METHODS, UNITS } from "@/lib/constants";
+import { useCatalog, useCustomers, useExpenseCategories, useSuppliers } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { cashLabel } from "@/lib/labels";
 import { cashAdjust } from "@/lib/ops";
@@ -100,6 +100,7 @@ export default function Reports() {
 
 function SummaryTab({ range }: { range: DateRangeValue }) {
   const { L, B, money } = useI18n();
+  const expCats = useExpenseCategories();
   const s = useLiveQuery(() => summaryFor(range.from, range.to), [range.from, range.to]);
   if (!s) return null;
   const monthly = s.seriesBy === "month";
@@ -169,7 +170,7 @@ function SummaryTab({ range }: { range: DateRangeValue }) {
             {Object.entries(s.expenseByCat)
               .sort((a, b) => b[1] - a[1])
               .map(([id, amt]) => {
-                const c = EXPENSE_CATEGORIES.find((x) => x.id === id);
+                const c = expCats.find((x) => x.id === id);
                 const pct = s.expenses > 0 ? (amt / s.expenses) * 100 : 0;
                 return (
                   <div key={id} className="grid gap-1">

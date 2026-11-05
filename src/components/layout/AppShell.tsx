@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { Languages, LogOut, Menu, UserRound, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,10 +23,11 @@ import { SyncBadge } from "./SyncBadge";
 function Logo({ name }: { name?: string }) {
   const { lang } = useI18n();
   return (
-    <div className="flex min-w-0 items-center gap-2.5">
+    // লোগো বা নামে চাপ দিলে হোম পেজে
+    <Link to="/" className="flex min-w-0 items-center gap-2.5 rounded-xl" aria-label="Home">
       <BrandMark />
       <span className="truncate text-lg leading-tight font-bold">{name || (lang === "bn" ? BRAND.bn : BRAND.en)}</span>
-    </div>
+    </Link>
   );
 }
 

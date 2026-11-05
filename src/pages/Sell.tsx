@@ -504,10 +504,16 @@ export default function Sell() {
         ) : filtered.length === 0 ? (
           <p className="py-10 text-center text-muted-foreground">{L("কিছু পাওয়া যায়নি", "Nothing found")}</p>
         ) : (
-          <div className="grid grid-cols-2 gap-3 @lg:grid-cols-3 @3xl:grid-cols-4">
+          // মোবাইলে এক সারিতে এক পণ্য — নাম, ব্র্যান্ড, সাইজ, দাম ও স্টক একসাথে; বড় পর্দায় ২-৩ কলাম
+          <div className="grid gap-1.5 @2xl:grid-cols-2 @2xl:gap-2 @5xl:grid-cols-3">
             {filtered.map(({ item, fuzzy, variants: matched, categoryMatched }, idx) => {
               const inCart = draft.lines.filter((l) => l.product_id === item.product.id).reduce((s, l) => s + l.qty, 0);
               const firstFuzzy = fuzzy && !filtered[idx - 1]?.fuzzy;
+              const one = matched.length === 1 ? matched[0] : item.variants.length === 1 ? item.variants[0] : null;
+              // খুঁজলে মিলে যাওয়া সাইজ, না খুঁজলে সব সাইজ
+              const sizes = (matched.length ? matched : item.variants).filter((v) => v.name || v.sku);
+              const price = one ? priceFor(one, customer) : item.minPrice;
+              const stock = one ? one.stock : item.totalStock;
               return (
                 <Fragment key={item.product.id}>
                 {firstFuzzy && (
@@ -519,64 +525,63 @@ export default function Sell() {
                   type="button"
                   onClick={() => onProductClick(item, matched)}
                   className={cn(
-                    "relative flex flex-col gap-2 rounded-2xl border-2 bg-white p-3 text-left shadow-xs transition hover:-translate-y-0.5 hover:border-primary hover:shadow-md active:scale-[0.98]",
-                    inCart > 0 && "border-emerald-500 bg-emerald-50/50",
+                    "flex items-center gap-2.5 rounded-xl border bg-white px-2.5 py-2 text-left shadow-xs transition hover:border-primary active:scale-[0.99]",
+                    inCart > 0 && "border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500",
                   )}
                 >
-                  {inCart > 0 && (
-                    <span className="tabular absolute -top-2 -right-2 grid min-w-7 place-items-center rounded-full bg-emerald-600 px-1.5 py-0.5 text-sm font-bold text-white shadow">
-                      {num(inCart)}
-                    </span>
-                  )}
-                  <div className="flex items-center gap-2">
+                  <span className="relative">
                     <IconTile name={item.category?.icon} color={item.category?.color} size="sm" />
-                    {item.variants.length > 1 && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-                        {num(item.variants.length)} {L("সাইজ", "sizes")}
+                    {inCart > 0 && (
+                      <span className="tabular absolute -top-1.5 -right-1.5 grid min-w-5 place-items-center rounded-full bg-emerald-600 px-1 text-xs leading-5 font-bold text-white shadow">
+                        {num(inCart)}
                       </span>
                     )}
-                  </div>
-                  <div className="min-h-11">
-                    <p className="line-clamp-2 leading-tight font-semibold">
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate leading-tight font-semibold">
                       <Highlight text={item.product.name} q={q} />
-                    </p>
-                    {item.product.brand && (
-                      <p className="truncate text-sm font-semibold text-foreground/70">
-                        <Highlight text={item.product.brand} q={q} />
-                      </p>
-                    )}
-                    {categoryMatched && item.category && (
-                      <p className="truncate text-xs text-muted-foreground">
-                        <Highlight text={B([item.category.name, item.category.name_en || item.category.name])} q={q} />
-                      </p>
-                    )}
-                    {matched.length > 0 && (
-                      <p className="mt-1 flex flex-wrap gap-1">
-                        {matched.slice(0, 4).map((v) => (
-                          <span key={v.id} className="rounded bg-muted px-1.5 text-xs">
-                            <Highlight text={v.name || v.sku || ""} q={q} />
-                          </span>
-                        ))}
-                        {matched.length > 4 && <span className="text-xs text-muted-foreground">+{num(matched.length - 4)}</span>}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-end justify-between gap-1">
-                    {matched.length === 1 ? (
-                      <>
-                        <span className="tabular font-bold text-emerald-700">{money(priceFor(matched[0], customer))}</span>
-                        <StockBadge qty={matched[0].stock} low={matched[0].low_stock} unit={B(UNITS[item.product.unit])} />
-                      </>
-                    ) : (
-                      <>
-                        <span className="tabular font-bold text-emerald-700">
-                          {money(item.minPrice)}
-                          {item.maxPrice !== item.minPrice && "+"}
+                      {item.product.brand && (
+                        <span className="font-medium text-muted-foreground">
+                          {" · "}
+                          <Highlight text={item.product.brand} q={q} />
                         </span>
-                        <StockBadge qty={item.totalStock} low={item.variants.length === 1 ? item.variants[0].low_stock : 0} unit={B(UNITS[item.product.unit])} />
-                      </>
-                    )}
-                  </div>
+                      )}
+                    </span>
+                    <span className="mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden text-xs text-muted-foreground">
+                      {categoryMatched && item.category && (
+                        <span className="shrink-0">
+                          <Highlight text={B([item.category.name, item.category.name_en || item.category.name])} q={q} /> ·
+                        </span>
+                      )}
+                      {item.variants.length > 1 && (
+                        <span className="shrink-0 rounded bg-muted px-1.5 font-semibold text-foreground/70">
+                          {num(item.variants.length)} {L("সাইজ", "sizes")}
+                        </span>
+                      )}
+                      {sizes.length > 0 ? (
+                        <span className="truncate">
+                          {sizes.slice(0, 6).map((v, i) => (
+                            <Fragment key={v.id}>
+                              {i > 0 && <span className="opacity-50"> · </span>}
+                              <span className={cn(matched.length > 0 && "rounded bg-muted px-1 font-semibold text-foreground")}>
+                                <Highlight text={v.name || v.sku || ""} q={q} />
+                              </span>
+                            </Fragment>
+                          ))}
+                          {sizes.length > 6 && <span> +{num(sizes.length - 6)}</span>}
+                        </span>
+                      ) : (
+                        <span className="truncate">{B(UNITS[item.product.unit])}</span>
+                      )}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 flex-col items-end gap-0.5">
+                    <span className="tabular text-sm font-bold text-emerald-700">
+                      {money(price)}
+                      {!one && item.maxPrice !== item.minPrice && "+"}
+                    </span>
+                    <StockBadge qty={stock} low={one ? one.low_stock : 0} unit={B(UNITS[item.product.unit])} />
+                  </span>
                 </button>
                 </Fragment>
               );

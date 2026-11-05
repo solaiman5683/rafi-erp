@@ -2,25 +2,27 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
-  Banknote,
+  BanknoteArrowDown,
   Boxes,
   ChevronRight,
-  Factory,
   HandCoins,
   PackagePlus,
+  PackageX,
   ReceiptText,
   ShoppingCart,
   TrendingUp,
   TriangleAlert,
   Truck,
-  Users,
+  Vault,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatCard, StockBadge } from "@/components/common";
 import { PaymentDialog } from "@/components/PaymentDialog";
 import { DailyBarChart } from "@/components/SalesChart";
+import { StockDialog, type StockTarget } from "@/components/StockDialog";
 import { useAuth } from "@/lib/auth";
 import { UNITS, WALK_IN } from "@/lib/constants";
 import { db } from "@/lib/db";
@@ -34,15 +36,15 @@ function ActionTile({ icon: Icon, label, hint, color, onClick }: { icon: LucideI
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-center gap-3 rounded-3xl p-4 text-left text-white shadow-md transition hover:-translate-y-1 hover:shadow-xl active:scale-[0.98] sm:flex-col sm:items-start sm:p-5"
+      className="group flex flex-col items-start gap-2 rounded-2xl p-3 text-left text-white shadow-md transition hover:-translate-y-1 hover:shadow-xl active:scale-[0.98] sm:gap-3 sm:rounded-3xl sm:p-5"
       style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}
     >
-      <span className="grid size-14 shrink-0 place-items-center rounded-2xl bg-white/20">
-        <Icon className="size-8" strokeWidth={2.2} />
+      <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/20 sm:size-14 sm:rounded-2xl">
+        <Icon className="size-6 sm:size-8" strokeWidth={2.2} />
       </span>
-      <span>
-        <span className="block text-xl font-bold">{label}</span>
-        <span className="block text-sm opacity-90">{hint}</span>
+      <span className="min-w-0">
+        <span className="block text-base leading-tight font-bold sm:text-xl">{label}</span>
+        <span className="block text-xs leading-tight opacity-90 sm:text-sm">{hint}</span>
       </span>
     </button>
   );
@@ -55,6 +57,7 @@ export default function Dashboard() {
   const settings = useSettings();
   const catalog = useCatalog();
   const [paying, setPaying] = useState(false);
+  const [adjust, setAdjust] = useState<StockTarget | null>(null);
   const today = todayISO();
 
   const data = useLiveQuery(async () => {
@@ -88,7 +91,7 @@ export default function Dashboard() {
         {settings?.shop_name && <p className="text-muted-foreground">{settings.shop_name}</p>}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
         <ActionTile icon={ShoppingCart} color="#16a34a" label={L("বিক্রি করুন", "Sell")} hint={L("নতুন মেমো বানান", "Make a new memo")} onClick={() => nav("/sell")} />
         <ActionTile icon={HandCoins} color="#7c3aed" label={L("টাকা জমা নিন", "Receive due")} hint={L("কাস্টমারের বাকি আদায়", "Collect customer due")} onClick={() => setPaying(true)} />
         {isOwner ? (
@@ -102,18 +105,18 @@ export default function Dashboard() {
       <div>
         <h2 className="mb-3 text-lg font-bold">{L("আজকের হিসাব", "Today")}</h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard icon={ShoppingCart} color="#16a34a" label={L("আজকের বিক্রি", "Sales today")} value={money(t ? t.netSales : 0)} hint={`${num(t?.salesCount ?? 0)} ${L("টি মেমো", "memos")}`} onClick={() => nav("/sales")} />
-          <StatCard icon={Banknote} color="#0d9488" label={L("আজ টাকা এসেছে", "Cash in today")} value={money(t?.cashIn ?? 0)} hint={L(`বাকি আদায় ${money(t?.collections ?? 0)}`, `Collected ${money(t?.collections ?? 0)}`)} />
+          <StatCard icon={ReceiptText} color="#16a34a" label={L("আজকের বিক্রি", "Sales today")} value={money(t ? t.netSales : 0)} hint={`${num(t?.salesCount ?? 0)} ${L("টি মেমো", "memos")}`} onClick={() => nav("/sales")} />
+          <StatCard icon={BanknoteArrowDown} color="#0d9488" label={L("আজ টাকা এসেছে", "Cash in today")} value={money(t?.cashIn ?? 0)} hint={L(`বাকি আদায় ${money(t?.collections ?? 0)}`, `Collected ${money(t?.collections ?? 0)}`)} />
           {isOwner && <StatCard icon={TrendingUp} color="#059669" label={L("আজকের লাভ", "Profit today")} value={money(t?.netProfit ?? 0)} hint={L("খরচ বাদ দিয়ে", "after expenses")} />}
           <StatCard icon={Wallet} color="#e11d48" label={L("আজকের খরচ", "Expenses today")} value={money(t?.expenses ?? 0)} onClick={() => nav("/expenses")} />
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard icon={Users} color="#7c3aed" label={L("কাস্টমারের কাছে পাওনা", "Receivable")} value={money(data?.rp.receivable ?? 0)} onClick={() => nav("/customers")} />
-        {isOwner && <StatCard icon={Factory} color="#0891b2" label={L("সাপ্লায়ারকে দেনা", "Payable")} value={money(data?.rp.payable ?? 0)} onClick={() => nav("/suppliers")} />}
-        {isOwner && <StatCard icon={Banknote} color="#16a34a" label={L("ক্যাশ বাক্সে আছে", "Cash in box")} value={money(data?.cash.cash ?? 0)} onClick={() => nav("/reports?tab=cash")} />}
-        <StatCard icon={TriangleAlert} color="#dc2626" label={L("স্টক কম / শেষ", "Low / out of stock")} value={num(low.length)} onClick={() => nav("/products")} />
+        <StatCard icon={HandCoins} color="#7c3aed" label={L("কাস্টমারের কাছে পাওনা", "Receivable")} value={money(data?.rp.receivable ?? 0)} onClick={() => nav("/customers")} />
+        {isOwner && <StatCard icon={Truck} color="#0891b2" label={L("সাপ্লায়ারকে দেনা", "Payable")} value={money(data?.rp.payable ?? 0)} onClick={() => nav("/suppliers")} />}
+        {isOwner && <StatCard icon={Vault} color="#16a34a" label={L("ক্যাশ বাক্সে আছে", "Cash in box")} value={money(data?.cash.cash ?? 0)} onClick={() => nav("/reports?tab=cash")} />}
+        <StatCard icon={PackageX} color="#dc2626" label={L("স্টক কম / শেষ", "Low / out of stock")} value={num(low.length)} onClick={() => nav("/products")} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
@@ -132,11 +135,30 @@ export default function Dashboard() {
           <CardContent className="grid gap-2">
             {low.length === 0 && <p className="py-6 text-center text-muted-foreground">{L("সব মাল যথেষ্ট আছে 👍", "Everything is well stocked")}</p>}
             {low.slice(0, 7).map(({ item, v }) => (
-              <div key={v.id} className="flex items-center gap-2 rounded-xl border p-2.5">
-                <span className="min-w-0 flex-1 truncate font-semibold">
-                  {item.product.name} {v.name && <span className="text-muted-foreground">· {v.name}</span>}
-                </span>
-                <StockBadge qty={v.stock} low={v.low_stock} unit={B(UNITS[item.product.unit])} />
+              <div key={v.id} className="flex items-center gap-1.5 rounded-xl border bg-white">
+                {/* সারিতে চাপ দিলে স্টক ঠিক করার উইন্ডো */}
+                <button
+                  type="button"
+                  onClick={() => setAdjust({ item, v })}
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-xl p-2.5 text-left hover:bg-muted/60"
+                  title={L("স্টক ঠিক করুন", "Adjust stock")}
+                >
+                  <span className="min-w-0 flex-1 truncate font-semibold">
+                    {item.product.name} {v.name && <span className="text-muted-foreground">· {v.name}</span>}
+                  </span>
+                  <StockBadge qty={v.stock} low={v.low_stock} unit={B(UNITS[item.product.unit])} />
+                </button>
+                {isOwner && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mr-2 shrink-0 text-blue-700"
+                    onClick={() => nav(`/purchase?add=${v.id}`)}
+                    title={L("এই মাল কিনুন", "Buy this item")}
+                  >
+                    <PackagePlus /> {L("কিনুন", "Buy")}
+                  </Button>
+                )}
               </div>
             ))}
             {isOwner && low.length > 0 && (
@@ -177,6 +199,7 @@ export default function Dashboard() {
       </Card>
 
       <PaymentDialog open={paying} onOpenChange={setPaying} partyType="customer" />
+      <StockDialog target={adjust} onClose={() => setAdjust(null)} />
     </div>
   );
 }

@@ -1,9 +1,15 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { DEFAULT_LOW_STOCK, expenseCategories, type ExpenseCategory } from "./constants";
 import { db } from "./db";
 import type { Category, Customer, Product, Settings, Supplier, Variant } from "./types";
 
 export function useSettings(): Settings | undefined {
   return useLiveQuery(() => db.settings.get("shop"), []);
+}
+
+/** সব খরচের খাত (মুছে ফেলাগুলোও, পুরোনো খরচে নাম দেখানোর জন্য) */
+export function useExpenseCategories(): ExpenseCategory[] {
+  return expenseCategories(useSettings());
 }
 
 export function useCategories(): Category[] {
@@ -33,19 +39,21 @@ export interface CatalogItem {
 
 export function useCatalog(): CatalogItem[] | undefined {
   return useLiveQuery(async () => {
-    const [products, variants, stock, categories] = await Promise.all([
+    const [products, variants, stock, categories, settings] = await Promise.all([
       db.products.toArray(),
       db.variants.toArray(),
       db.stock.toArray(),
       db.categories.toArray(),
+      db.settings.get("shop"),
     ]);
+    const low = settings?.low_stock ?? DEFAULT_LOW_STOCK;
     const stockMap = new Map(stock.map((s) => [s.variant_id, s.qty]));
     const catMap = new Map(categories.map((c) => [c.id, c]));
     const byProduct = new Map<string, VariantWithStock[]>();
     for (const v of variants) {
       if (v.deleted) continue;
       const list = byProduct.get(v.product_id) ?? [];
-      list.push({ ...v, stock: stockMap.get(v.id) ?? 0 });
+      list.push({ ...v, low_stock: low, stock: stockMap.get(v.id) ?? 0 });
       byProduct.set(v.product_id, list);
     }
     const items: CatalogItem[] = [];
@@ -61,7 +69,7 @@ export function useCatalog(): CatalogItem[] | undefined {
         totalStock: vs.reduce((s, v) => s + v.stock, 0),
         minPrice: Math.min(...prices),
         maxPrice: Math.max(...prices),
-        lowStock: vs.some((v) => v.stock <= (v.low_stock ?? 0)),
+        lowStock: vs.some((v) => v.stock <= low),
         haystack: [p.name, p.brand, ...vs.map((v) => `${v.name} ${v.sku ?? ""}`)].join(" ").toLowerCase(),
       });
     }

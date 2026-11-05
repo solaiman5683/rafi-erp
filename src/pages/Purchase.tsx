@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { useLiveQuery } from "dexie-react-hooks";
 import { toast } from "sonner";
 import { CircleCheckBig, Factory, ListOrdered, PackagePlus, Plus, Search, Trash2, Truck, X } from "lucide-react";
@@ -55,6 +55,7 @@ export default function Purchase() {
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
+  const [params, setParams] = useSearchParams();
 
   useEffect(() => {
     try {
@@ -108,6 +109,27 @@ export default function Purchase() {
     });
     setQ("");
   }
+
+  // ড্যাশবোর্ডের "কম স্টক" থেকে "কিনুন" চেপে এলে (?add=সাইজের id) সেই সাইজ তালিকায় যোগ
+  const addParam = params.get("add");
+  const lastAdded = useRef<string | null>(null);
+  useEffect(() => {
+    if (!addParam || !catalog || lastAdded.current === addParam) return;
+    lastAdded.current = addParam;
+    for (const item of catalog) {
+      const v = item.variants.find((x) => x.id === addParam);
+      if (!v) continue;
+      setD((x) =>
+        x.lines.some((l) => l.variant_id === v.id)
+          ? x
+          : { ...x, lines: [...x.lines, { key: newId(), qty: 1, variant_id: v.id, product_id: item.product.id, name: item.product.name, variant_name: v.name, unit: item.product.unit, price: v.buy_price }] },
+      );
+      toast.success(`${item.product.name}${v.name ? ` ${v.name}` : ""} ${L("যোগ হয়েছে", "added")}`, { duration: 1200 });
+      break;
+    }
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addParam, catalog]);
 
   async function save() {
     if (!supplier) {
@@ -210,8 +232,8 @@ export default function Purchase() {
               ) : (
                 <div className="grid gap-2">
                   {d.lines.map((l) => (
-                    <div key={l.key} className="grid grid-cols-2 gap-2 rounded-xl border bg-white p-3 sm:grid-cols-[1fr_100px_120px_120px_auto] sm:items-end">
-                      <div className="col-span-2 min-w-0 sm:col-span-1">
+                    <div key={l.key} className="relative grid grid-cols-2 gap-2 rounded-xl border bg-white p-3 sm:grid-cols-[1fr_100px_120px_120px] sm:items-end sm:pr-12">
+                      <div className="col-span-2 min-w-0 pr-8 sm:col-span-1 sm:pr-0">
                         <p className="truncate font-semibold">{l.name}</p>
                         <p className="truncate text-sm text-muted-foreground">
                           {l.variant_name} · {L("মোট", "Total")} <b className="tabular text-foreground">{money(l.qty * l.price)}</b>
@@ -223,13 +245,13 @@ export default function Purchase() {
                       <Field label={L("কেনা দাম/একক", "Cost/unit")}>
                         <NumInput value={l.price} allowEmpty={false} onValueChange={(n) => setLine(l.key, { price: n })} prefix="৳" />
                       </Field>
-                      <Field label={L("নতুন বিক্রি দাম", "New sell price")}>
+                      <Field label={L("নতুন বিক্রি দাম", "New sell price")} className="col-span-2 sm:col-span-1">
                         <NumInput value={l.new_sell_price ?? 0} onValueChange={(n) => setLine(l.key, { new_sell_price: n || undefined })} prefix="৳" placeholder={L("আগেরটা", "same")} />
                       </Field>
                       <Button
                         variant="ghost"
-                        size="icon"
-                        className="col-span-2 justify-self-end text-red-600 sm:col-span-1"
+                        size="icon-sm"
+                        className="absolute top-1.5 right-1.5 text-red-600"
                         onClick={() => setD((x) => ({ ...x, lines: x.lines.filter((y) => y.key !== l.key) }))}
                         aria-label="remove"
                       >
