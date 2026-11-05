@@ -11,9 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmAction, Field, PageHeader } from "@/components/common";
 import { Highlight } from "@/components/Highlight";
 import { IconTile, NamedIcon } from "@/components/Icon";
+import { IconPicker } from "@/components/IconPicker";
 import { NumInput } from "@/components/NumInput";
 import { StockDialog, type StockTarget } from "@/components/StockDialog";
-import { CATEGORY_COLORS, CATEGORY_ICONS, COMMON_SIZES, UNITS } from "@/lib/constants";
+import { CATEGORY_COLORS, COMMON_SIZES, UNITS } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { useCatalog, useCategories } from "@/lib/hooks";
 import { matchesText, normalize, prettySize, sameText, searchCatalog } from "@/lib/search";
@@ -506,18 +507,7 @@ export default function ProductForm() {
                     <Input value={newCat.name_en ?? ""} onChange={(e) => setNewCat({ ...newCat, name_en: e.target.value })} />
                   </Field>
                   <Field label={L("আইকন", "Icon")}>
-                    <div className="grid grid-cols-8 gap-1.5">
-                      {CATEGORY_ICONS.map((ic) => (
-                        <button
-                          key={ic}
-                          type="button"
-                          onClick={() => setNewCat({ ...newCat, icon: ic })}
-                          className={cn("grid aspect-square place-items-center rounded-lg border-2", newCat.icon === ic ? "border-primary bg-primary/10" : "bg-white")}
-                        >
-                          <NamedIcon name={ic} className="size-5" style={{ color: newCat.color }} />
-                        </button>
-                      ))}
-                    </div>
+                    <IconPicker value={newCat.icon} color={newCat.color} onChange={(icon) => setNewCat({ ...newCat, icon })} />
                   </Field>
                   <Field label={L("রং", "Color")}>
                     <div className="flex flex-wrap gap-2">

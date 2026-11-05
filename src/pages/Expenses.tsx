@@ -7,11 +7,12 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { ConfirmAction, EmptyState, Field, PageHeader } from "@/components/common";
 import { DateRangeBar, useDateRange } from "@/components/DateRange";
-import { IconTile, NamedIcon } from "@/components/Icon";
+import { IconTile } from "@/components/Icon";
+import { IconPicker } from "@/components/IconPicker";
 import { NumInput } from "@/components/NumInput";
 import { methodLabel, PayMethodPicker } from "@/components/PayMethodPicker";
 import { useAuth } from "@/lib/auth";
-import { CATEGORY_COLORS, EXPENSE_ICONS } from "@/lib/constants";
+import { CATEGORY_COLORS } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { todayISO } from "@/lib/format";
 import { useExpenseCategories } from "@/lib/hooks";
@@ -255,18 +256,7 @@ export default function Expenses() {
                   <Input autoFocus value={editCat.name ?? ""} onChange={(e) => setEditCat({ ...editCat, name: e.target.value })} placeholder={L("যেমন: পানির বিল, দোকান পরিষ্কার", "e.g. Water bill, Cleaning")} />
                 </Field>
                 <Field label={L("আইকন", "Icon")}>
-                  <div className="grid grid-cols-8 gap-1.5">
-                    {EXPENSE_ICONS.map((ic) => (
-                      <button
-                        key={ic}
-                        type="button"
-                        onClick={() => setEditCat({ ...editCat, icon: ic })}
-                        className={cn("grid aspect-square place-items-center rounded-lg border-2", editCat.icon === ic ? "border-primary bg-primary/10" : "bg-white")}
-                      >
-                        <NamedIcon name={ic} className="size-5" style={{ color: editCat.color }} />
-                      </button>
-                    ))}
-                  </div>
+                  <IconPicker value={editCat.icon} color={editCat.color} onChange={(icon) => setEditCat({ ...editCat, icon })} />
                 </Field>
                 <Field label={L("রং", "Color")}>
                   <div className="flex flex-wrap gap-2">

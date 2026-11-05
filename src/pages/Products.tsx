@@ -10,9 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ConfirmAction, EmptyState, Field, PageHeader, StatCard, StockBadge } from "@/components/common";
 import { Highlight } from "@/components/Highlight";
 import { IconTile, NamedIcon } from "@/components/Icon";
+import { IconPicker } from "@/components/IconPicker";
 import { StockDialog, type StockTarget } from "@/components/StockDialog";
 import { useAuth } from "@/lib/auth";
-import { CATEGORY_COLORS, CATEGORY_ICONS, UNITS } from "@/lib/constants";
+import { CATEGORY_COLORS, UNITS } from "@/lib/constants";
 import { useCatalog, useCategories, type CatalogItem } from "@/lib/hooks";
 import { searchCatalog } from "@/lib/search";
 import { useI18n } from "@/lib/i18n";
@@ -378,18 +379,7 @@ function CategoryManager({ open, onOpenChange, categories }: { open: boolean; on
               <Input value={edit.name_en ?? ""} onChange={(e) => setEdit({ ...edit, name_en: e.target.value })} />
             </Field>
             <Field label={L("আইকন", "Icon")}>
-              <div className="grid grid-cols-8 gap-1.5">
-                {CATEGORY_ICONS.map((ic) => (
-                  <button
-                    key={ic}
-                    type="button"
-                    onClick={() => setEdit({ ...edit, icon: ic })}
-                    className={cn("grid aspect-square place-items-center rounded-lg border-2", edit.icon === ic ? "border-primary bg-primary/10" : "bg-white")}
-                  >
-                    <NamedIcon name={ic} className="size-5" style={{ color: edit.color }} />
-                  </button>
-                ))}
-              </div>
+              <IconPicker value={edit.icon} color={edit.color} onChange={(icon) => setEdit({ ...edit, icon })} />
             </Field>
             <Field label={L("রং", "Color")}>
               <div className="flex flex-wrap gap-2">

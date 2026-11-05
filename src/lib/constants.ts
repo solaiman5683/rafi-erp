@@ -66,11 +66,6 @@ export interface ExpenseCategory {
   deleted?: boolean;
 }
 
-export const EXPENSE_ICONS = [
-  "Receipt", "Store", "Users", "Lightbulb", "Zap", "Truck", "Fuel", "HardHat", "Coffee", "Smartphone",
-  "Wrench", "Cog", "Package", "Box", "Droplets", "Flame",
-];
-
 /** আগে থেকে থাকা খাত + মালিকের বানানো খাত ("অন্যান্য" সবসময় শেষে) */
 export function expenseCategories(s?: Settings): ExpenseCategory[] {
   const custom: ExpenseCategory[] = (s?.expense_categories ?? []).map((c) => ({
@@ -98,12 +93,6 @@ export const DEFAULT_CATEGORIES: { name: string; name_en: string; icon: string; 
   { name: "ওয়েল্ডিং", name_en: "Welding", icon: "Flame", color: "#ea580c" },
   { name: "অন্যান্য", name_en: "Others", icon: "Package", color: "#64748b" },
 ];
-
-export const CATEGORY_ICONS = [
-  "Cylinder", "ShowerHead", "Zap", "Hammer", "Bolt", "PaintBucket", "Fan", "Lock", "Flame", "Package",
-  "Wrench", "Drill", "Cable", "Plug", "Lightbulb", "Ruler", "Cog", "Pickaxe", "Shovel", "Paintbrush",
-  "Droplets", "Bath", "HardHat", "Construction", "BrickWall", "Layers", "Box", "Scissors", "Gauge", "Fuel",
-] as const;
 
 export const CATEGORY_COLORS = [
   "#0284c7", "#0891b2", "#059669", "#16a34a", "#ca8a04", "#ea580c", "#dc2626", "#db2777", "#9333ea", "#4f46e5", "#475569", "#b45309",
