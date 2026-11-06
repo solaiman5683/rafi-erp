@@ -455,7 +455,7 @@ export default function Sell() {
       )}
       {/* শেষ বাটন সবসময় নিচে দেখা যাবে */}
       {count > 0 && (
-        <div className="sticky bottom-0 z-10 -mx-3 mt-auto -mb-3 flex gap-2 rounded-b-3xl border-t bg-white/95 p-3 backdrop-blur">
+        <div className="sticky -bottom-3 z-10 -mx-3 mt-auto -mb-3 flex gap-2 rounded-b-3xl border-t bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
           <Button variant="outline" size="lg" className="h-14 text-red-600" onClick={clearAll} aria-label="clear">
             <Trash2 />
           </Button>
@@ -470,7 +470,8 @@ export default function Sell() {
   return (
     <div className="lg:grid lg:grid-cols-[1fr_340px] lg:gap-4 xl:grid-cols-[1fr_420px] xl:gap-5">
       {/* পণ্য */}
-      <section className="@container min-w-0">
+      {/* মোবাইলে নিচের বিল-বারের জন্য জায়গা, যাতে শেষ পণ্য ঢাকা না পড়ে */}
+      <section className={cn("@container min-w-0", count > 0 && "pb-24 lg:pb-0")}>
         <div className="mb-3 flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground" />
@@ -537,7 +538,7 @@ export default function Sell() {
           </div>
         ) : (
           // মোবাইলে এক সারিতে এক পণ্য — নাম, ব্র্যান্ড, সাইজ, দাম ও স্টক একসাথে; বড় পর্দায় ২-৩ কলাম
-          <div className="grid gap-1.5 @2xl:grid-cols-2 @2xl:gap-2 @5xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-1.5 @2xl:grid-cols-2 @2xl:gap-2 @5xl:grid-cols-3">
             {filtered.map(({ item, fuzzy, variants: matched, categoryMatched }, idx) => {
               const inCart = draft.lines.filter((l) => l.product_id === item.product.id).reduce((s, l) => s + l.qty, 0);
               const firstFuzzy = fuzzy && !filtered[idx - 1]?.fuzzy;
@@ -557,7 +558,7 @@ export default function Sell() {
                   type="button"
                   onClick={() => onProductClick(item, matched)}
                   className={cn(
-                    "flex items-center gap-2.5 rounded-xl border bg-white px-2.5 py-2 text-left shadow-xs transition hover:border-primary active:scale-[0.99]",
+                    "flex min-w-0 items-center gap-2.5 rounded-xl border bg-white px-2.5 py-2 text-left shadow-xs transition hover:border-primary active:scale-[0.99]",
                     inCart > 0 && "border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500",
                   )}
                 >
@@ -591,7 +592,7 @@ export default function Sell() {
                         </span>
                       )}
                       {sizes.length > 0 ? (
-                        <span className="truncate">
+                        <span className="block min-w-0 truncate">
                           {sizes.slice(0, 6).map((v, i) => (
                             <Fragment key={v.id}>
                               {i > 0 && <span className="opacity-50"> · </span>}
@@ -646,7 +647,7 @@ export default function Sell() {
         </button>
       )}
       <Sheet open={cartOpen} onOpenChange={setCartOpen}>
-        <SheetContent side="bottom" className="h-[94dvh]! max-h-[94dvh] gap-2 overflow-hidden rounded-t-3xl p-3">
+        <SheetContent side="bottom" className="h-[94dvh]! max-h-[94dvh] gap-2 overflow-hidden rounded-t-3xl p-3 pb-0">
           <SheetHeader className="p-1">
             <SheetTitle className="text-xl">{L("বিল", "Bill")}</SheetTitle>
           </SheetHeader>
@@ -746,13 +747,13 @@ function VariantDialog({
           <DialogTitle className="text-xl">{item?.product.name}</DialogTitle>
           <p className="text-muted-foreground">{L("যেটা লাগবে সেটাতে চাপ দিন, − / + দিয়ে সংখ্যা কমান-বাড়ান", "Tap what you need, use − / + to change quantity")}</p>
         </DialogHeader>
-        <div className="grid max-h-[55vh] gap-2 overflow-y-auto">
+        <div className="grid max-h-[55vh] grid-cols-1 gap-2 overflow-y-auto">
           {[...(item?.variants ?? [])].sort((a, b) => Number(matched.includes(b.id)) - Number(matched.includes(a.id))).map((v) => {
             const n = inCart(v.id);
             return (
               <div
                 key={v.id}
-                className={cn("flex items-center gap-2 rounded-xl border-2 bg-white p-2 pl-3 transition", n > 0 && "border-emerald-500 bg-emerald-50")}
+                className={cn("flex min-w-0 items-center gap-2 rounded-xl border-2 bg-white p-2 pl-3 transition", n > 0 && "border-emerald-500 bg-emerald-50")}
               >
                 <button type="button" onClick={() => onAdd(v)} className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left active:scale-[0.99]">
                   <span className="min-w-0 flex-1">

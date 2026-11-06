@@ -24,7 +24,8 @@ export function PayMethodPicker({ value, onChange, compact }: { value: PayMethod
             )}
           >
             <Icon className="size-4 shrink-0" />
-            <span className="truncate">{B(m.label)}</span>
+            {/* ছোট জায়গায় দুই লাইনে ভাঙে, কেটে যায় না: "নগদ (Nagad)" */}
+            <span className="min-w-0 text-center leading-tight">{B(m.label)}</span>
           </button>
         );
       })}

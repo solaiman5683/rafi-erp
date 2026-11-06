@@ -343,7 +343,7 @@ function VariantsDialog({ item, q, matched, onClose, onStock }: { item: CatalogI
                       <ClipboardCheck className="text-orange-600" />
                     </Button>
                   )}
-                  <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={v.stock <= 0} onClick={() => nav(`/sell?add=${v.id}`)}>
+                  <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => nav(`/sell?add=${v.id}`)}>
                     <ShoppingCart /> {L("বিক্রি", "Sell")}
                   </Button>
                 </div>
