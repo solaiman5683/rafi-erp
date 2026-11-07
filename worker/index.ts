@@ -121,6 +121,33 @@ app.use("/auth/me", requireAuth);
 app.use("/users/*", requireAuth, requireOwner);
 app.use("/users", requireAuth, requireOwner);
 app.use("/sync/*", requireAuth);
+app.use("/quotes", requireAuth);
+
+// ---------- কোটেশন শেয়ার ----------
+
+const MAX_QUOTE_BYTES = 100_000;
+
+/** কোটেশন সেভ করে একটা পাবলিক লিংকের id ফেরত দেয় */
+app.post("/quotes", async (c) => {
+  const user = c.get("user");
+  const body = await c.req.json<{ doc?: unknown }>().catch(() => ({}) as { doc?: unknown });
+  if (!body.doc || typeof body.doc !== "object") return err(c, 400, "invalid", "ভুল তথ্য");
+  const data = JSON.stringify(body.doc);
+  if (data.length > MAX_QUOTE_BYTES) return err(c, 400, "too_large", "কোটেশন অনেক বড়");
+  const id = crypto.randomUUID();
+  await c.env.DB.prepare("INSERT INTO quotes (id, data, created_at, created_by) VALUES (?, ?, ?, ?)").bind(id, data, Date.now(), user.id).run();
+  return c.json({ id });
+});
+
+/** লিংক থেকে কোটেশন দেখা — লগইন লাগে না */
+app.get("/public/quotes/:id", async (c) => {
+  const id = c.req.param("id");
+  if (!/^[0-9a-f-]{36}$/.test(id)) return err(c, 404, "not_found", "কোটেশন পাওয়া যায়নি");
+  const row = await c.env.DB.prepare("SELECT data, created_at FROM quotes WHERE id = ?").bind(id).first<{ data: string; created_at: number }>();
+  if (!row) return err(c, 404, "not_found", "কোটেশন পাওয়া যায়নি");
+  c.header("Cache-Control", "public, max-age=300");
+  return c.json({ doc: JSON.parse(row.data), created_at: row.created_at });
+});
 
 app.get("/auth/me", async (c) => {
   const user = c.get("user");

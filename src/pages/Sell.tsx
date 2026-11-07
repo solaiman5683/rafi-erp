@@ -16,6 +16,7 @@ import {
   UserRound,
   X,
   PackagePlus,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -32,8 +33,9 @@ import { useAuth } from "@/lib/auth";
 import { UNITS, WALK_IN } from "@/lib/constants";
 import { db } from "@/lib/db";
 import { calcLine } from "@/lib/discount";
-import { round2 } from "@/lib/format";
-import { useCatalog, useCategories, type CatalogItem, type VariantWithStock } from "@/lib/hooks";
+import { round2, todayISO } from "@/lib/format";
+import { useCatalog, useCategories, useSettings, type CatalogItem, type VariantWithStock } from "@/lib/hooks";
+import { quoteNo, saveCurrentQuote, type QuoteDoc } from "@/lib/quote";
 import { searchCatalog, type SearchHit } from "@/lib/search";
 import { useI18n } from "@/lib/i18n";
 import { computeCart, createSale, newId, type CartLine } from "@/lib/ops";
@@ -71,8 +73,9 @@ function priceFor(v: VariantWithStock | { sell_price: number; wholesale_price?: 
 
 export default function Sell() {
   const { L, B, money, num } = useI18n();
-  const { isOwner } = useAuth();
+  const { isOwner, user } = useAuth();
   const nav = useNavigate();
+  const settings = useSettings();
   const [params, setParams] = useSearchParams();
   const catalog = useCatalog();
   const categories = useCategories();
@@ -270,6 +273,45 @@ export default function Sell() {
     setCustomer(null);
   }
 
+  /** বিক্রি না করে কোটেশন — দোকানের তথ্যসহ পুরো হিসাব, যাতে লিংকে খুললেও দেখা যায় */
+  function makeQuote() {
+    if (!count) return toast.error(L("কার্টে কোনো পণ্য নেই", "Cart is empty"));
+    const now = new Date();
+    const doc: QuoteDoc = {
+      v: 1,
+      no: quoteNo(now),
+      date: todayISO(now),
+      created_at: now.getTime(),
+      by_name: user?.name,
+      shop: {
+        name: settings?.shop_name || "",
+        tagline: settings?.tagline,
+        address: settings?.address,
+        phone: settings?.phone,
+        phone2: settings?.phone2,
+        note: settings?.invoice_note,
+      },
+      customer: customer ? { name: customer.name, phone: customer.phone, address: customer.address } : undefined,
+      items: calc.items.map((i) => ({
+        name: i.line.name,
+        variant: i.line.variant_name || undefined,
+        unit: i.line.unit,
+        qty: i.line.qty,
+        list_price: i.line.list_price,
+        price: i.price,
+        disc_amount: i.disc_amount,
+        total: i.total,
+      })),
+      subtotal: calc.subtotal,
+      discount: calc.discount,
+      total: calc.total,
+      note: draft.note || undefined,
+    };
+    saveCurrentQuote(doc);
+    setCartOpen(false);
+    nav("/quote");
+  }
+
   async function complete() {
     if (!count) return toast.error(L("কার্টে কোনো পণ্য নেই", "Cart is empty"));
     if (draft.lines.some((l) => l.qty <= 0)) return toast.error(L("পরিমাণ শূন্য হতে পারবে না", "Quantity can't be zero"));
@@ -380,15 +422,26 @@ export default function Sell() {
                 </div>
                 <button type="button" onClick={() => setEditKey(l.key)} className="tabular min-w-0 flex-1 text-left text-sm text-muted-foreground">
                   × {money(c.price)}
-                  {l.disc_mode !== "none" && c.disc_amount !== 0 && (
-                    <span className="ml-1 inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 text-xs font-semibold text-amber-800">
-                      <Tag className="size-3" />
-                      {num(c.percent)}%
-                    </span>
-                  )}
                 </button>
-                <span className="tabular font-bold">{money(c.total)}</span>
+                <span className="text-right">
+                  {c.disc_amount > 0 && <span className="tabular block text-xs text-muted-foreground line-through">{money(round2(l.qty * l.list_price))}</span>}
+                  <span className="tabular block font-bold">{money(c.total)}</span>
+                </span>
               </div>
+              {/* প্রতিটা পণ্যে আলাদা ছাড় — চাপ দিলে ছাড়ের ঘর খোলে */}
+              <button
+                type="button"
+                onClick={() => setEditKey(l.key)}
+                className={cn(
+                  "mt-1.5 inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold",
+                  c.disc_amount > 0 ? "border-amber-300 bg-amber-100 text-amber-800" : "border-dashed text-muted-foreground hover:border-amber-400 hover:text-amber-700",
+                )}
+              >
+                <Tag className="size-3.5" />
+                {c.disc_amount > 0
+                  ? L(`ছাড় ${money(c.disc_amount)} (${num(c.percent)}%) · বদলান`, `Discount ${money(c.disc_amount)} (${num(c.percent)}%) · change`)
+                  : L("এই পণ্যে ছাড় দিন", "Discount this item")}
+              </button>
               {l.qty > stock ? (
                 <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-amber-700">
                   <TriangleAlert className="size-3" /> {L(`স্টকে আছে ${num(stock)} — বিক্রির পর স্টক হবে ${num(round2(stock - l.qty))}`, `${num(stock)} in stock — will be ${num(round2(stock - l.qty))} after sale`)}
@@ -459,8 +512,17 @@ export default function Sell() {
           <Button variant="outline" size="lg" className="h-14 text-red-600" onClick={clearAll} aria-label="clear">
             <Trash2 />
           </Button>
-          <Button size="lg" className="h-14 flex-1 bg-emerald-600 text-lg hover:bg-emerald-700" disabled={busy} onClick={() => void complete()}>
-            <CircleCheckBig className="size-6" /> {L("বিক্রি সম্পন্ন", "Complete sale")} · <span className="tabular">{money(calc.total)}</span>
+          <Button variant="outline" size="lg" className="h-14 flex-col gap-0 px-3 text-xs leading-tight" onClick={makeQuote} title={L("বিক্রি না করে কোটেশন বানান", "Make a quotation without selling")}>
+            <FileText className="size-5" />
+            {L("কোটেশন", "Quote")}
+          </Button>
+          <Button size="lg" className="h-14 min-w-0 flex-1 bg-emerald-600 hover:bg-emerald-700" disabled={busy} onClick={() => void complete()}>
+            <CircleCheckBig className="size-6" />
+            {/* মোবাইলে জায়গা কম — টাকা নিচের লাইনে */}
+            <span className="flex min-w-0 flex-col items-start leading-tight">
+              <span className="truncate text-base font-bold sm:text-lg">{L("বিক্রি সম্পন্ন", "Complete sale")}</span>
+              <span className="tabular text-sm opacity-90">{money(calc.total)}</span>
+            </span>
           </Button>
         </div>
       )}
@@ -846,9 +908,26 @@ function LineEditor({
               priceLabel={L(`বিক্রি দাম/${unit}`, `Sold/${unit}`)}
             />
           </Field>
-          <div className="flex items-center justify-between rounded-xl bg-emerald-50 px-4 py-3">
-            <span className="font-semibold">{L("এই লাইনের মোট", "Line total")}</span>
-            <span className="tabular text-2xl font-bold text-emerald-700">{money(c.total)}</span>
+          {/* মোট টাকা সরাসরি লিখলেও হয়: ১০ পিস ১০০০ → ৮০০ লিখুন */}
+          <div className="grid gap-1.5 rounded-xl bg-emerald-50 px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-semibold">{L("এই পণ্যের মোট দাম", "Total for this item")}</span>
+              <NumInput
+                value={c.total}
+                allowEmpty={false}
+                prefix="৳"
+                className="w-36 [&_input]:h-11 [&_input]:text-right [&_input]:text-xl [&_input]:font-bold [&_input]:text-emerald-700"
+                onValueChange={(n) => {
+                  const base = round2(f.qty * f.list_price);
+                  setF({ ...f, disc_mode: n >= base ? "none" : "amount", disc_value: n >= base ? 0 : round2(base - n) });
+                }}
+              />
+            </div>
+            {c.disc_amount > 0 && (
+              <p className="tabular text-right text-sm text-emerald-800">
+                {money(round2(f.qty * f.list_price))} − {money(c.disc_amount)} {L("ছাড়", "discount")}
+              </p>
+            )}
           </div>
           {showCost && cost > 0 && (
             <p className="text-sm text-muted-foreground">

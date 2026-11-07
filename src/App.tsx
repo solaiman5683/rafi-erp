@@ -26,6 +26,12 @@ const PrintSale = lazy(() => import("@/pages/print/PrintSale"));
 const PrintReceipt = lazy(() => import("@/pages/print/PrintReceipt"));
 const PrintLedger = lazy(() => import("@/pages/print/PrintLedger"));
 const PrintTable = lazy(() => import("@/pages/print/PrintTable"));
+const QuotePage = lazy(() =>
+  import("@/pages/QuotePage").then((m) => ({ default: m.QuotePage })),
+);
+const PublicQuotePage = lazy(() =>
+  import("@/pages/QuotePage").then((m) => ({ default: m.PublicQuotePage })),
+);
 
 function Splash() {
   return (
@@ -47,7 +53,11 @@ function Gate({ children }: { children: ReactNode }) {
 function OwnerOrSalesPrint() {
   const { isOwner } = useAuth();
   const kind = new URLSearchParams(window.location.search).get("kind");
-  return isOwner || kind === "sales" ? <PrintTable /> : <Navigate to="/" replace />;
+  return isOwner || kind === "sales" ? (
+    <PrintTable />
+  ) : (
+    <Navigate to="/" replace />
+  );
 }
 
 function OwnerOnly({ children }: { children: ReactNode }) {
@@ -61,35 +71,116 @@ export default function App() {
       <TooltipProvider delayDuration={300}>
         <AuthProvider>
           <BrowserRouter>
-            <Gate>
-              <Suspense fallback={<Splash />}>
-                <Routes>
-                  <Route path="/print/sale/:id" element={<PrintSale />} />
-                  <Route path="/print/receipt/:id" element={<PrintReceipt />} />
-                  <Route path="/print/ledger/:type/:id" element={<PrintLedger />} />
-                  <Route path="/print/table" element={<OwnerOrSalesPrint />} />
-                  <Route element={<AppShell />}>
-                    <Route index element={<Dashboard />} />
-                    <Route path="sell" element={<Sell />} />
-                    <Route path="sales" element={<Sales />} />
-                    <Route path="sales/:id" element={<SaleDetail />} />
-                    <Route path="purchase" element={<OwnerOnly><Purchase /></OwnerOnly>} />
-                    <Route path="purchase/list" element={<OwnerOnly><Purchases /></OwnerOnly>} />
-                    <Route path="products" element={<Products />} />
-                    <Route path="products/new" element={<OwnerOnly><ProductForm /></OwnerOnly>} />
-                    <Route path="products/:id" element={<OwnerOnly><ProductForm /></OwnerOnly>} />
-                    <Route path="customers" element={<Customers />} />
-                    <Route path="customers/:id" element={<PartyDetail type="customer" />} />
-                    <Route path="suppliers" element={<OwnerOnly><Suppliers /></OwnerOnly>} />
-                    <Route path="suppliers/:id" element={<OwnerOnly><PartyDetail type="supplier" /></OwnerOnly>} />
-                    <Route path="expenses" element={<Expenses />} />
-                    <Route path="reports" element={<OwnerOnly><Reports /></OwnerOnly>} />
-                    <Route path="settings" element={<SettingsPage />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
-                  </Route>
-                </Routes>
-              </Suspense>
-            </Gate>
+            <Routes>
+              {/* শেয়ার করা কোটেশনের লিংক — লগইন ছাড়াই খোলে */}
+              <Route
+                path="/q/:id"
+                element={
+                  <Suspense fallback={<Splash />}>
+                    <PublicQuotePage />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="*"
+                element={
+                  <Gate>
+                    <Suspense fallback={<Splash />}>
+                      <Routes>
+                        <Route path="/quote" element={<QuotePage />} />
+                        <Route path="/print/sale/:id" element={<PrintSale />} />
+                        <Route
+                          path="/print/receipt/:id"
+                          element={<PrintReceipt />}
+                        />
+                        <Route
+                          path="/print/ledger/:type/:id"
+                          element={<PrintLedger />}
+                        />
+                        <Route
+                          path="/print/table"
+                          element={<OwnerOrSalesPrint />}
+                        />
+                        <Route element={<AppShell />}>
+                          <Route index element={<Dashboard />} />
+                          <Route path="sell" element={<Sell />} />
+                          <Route path="sales" element={<Sales />} />
+                          <Route path="sales/:id" element={<SaleDetail />} />
+                          <Route
+                            path="purchase"
+                            element={
+                              <OwnerOnly>
+                                <Purchase />
+                              </OwnerOnly>
+                            }
+                          />
+                          <Route
+                            path="purchase/list"
+                            element={
+                              <OwnerOnly>
+                                <Purchases />
+                              </OwnerOnly>
+                            }
+                          />
+                          <Route path="products" element={<Products />} />
+                          <Route
+                            path="products/new"
+                            element={
+                              <OwnerOnly>
+                                <ProductForm />
+                              </OwnerOnly>
+                            }
+                          />
+                          <Route
+                            path="products/:id"
+                            element={
+                              <OwnerOnly>
+                                <ProductForm />
+                              </OwnerOnly>
+                            }
+                          />
+                          <Route path="customers" element={<Customers />} />
+                          <Route
+                            path="customers/:id"
+                            element={<PartyDetail type="customer" />}
+                          />
+                          <Route
+                            path="suppliers"
+                            element={
+                              <OwnerOnly>
+                                <Suppliers />
+                              </OwnerOnly>
+                            }
+                          />
+                          <Route
+                            path="suppliers/:id"
+                            element={
+                              <OwnerOnly>
+                                <PartyDetail type="supplier" />
+                              </OwnerOnly>
+                            }
+                          />
+                          <Route path="expenses" element={<Expenses />} />
+                          <Route
+                            path="reports"
+                            element={
+                              <OwnerOnly>
+                                <Reports />
+                              </OwnerOnly>
+                            }
+                          />
+                          <Route path="settings" element={<SettingsPage />} />
+                          <Route
+                            path="*"
+                            element={<Navigate to="/" replace />}
+                          />
+                        </Route>
+                      </Routes>
+                    </Suspense>
+                  </Gate>
+                }
+              />
+            </Routes>
           </BrowserRouter>
           <Toaster position="top-center" />
         </AuthProvider>

@@ -106,7 +106,7 @@ export function StatCard({
 
 export function Field({ label, children, hint, className }: { label: string; children: ReactNode; hint?: string; className?: string }) {
   return (
-    <div className={cn("grid gap-1.5", className)}>
+    <div className={cn("grid min-w-0 grid-cols-1 gap-1.5", className)}>
       <Label className="text-sm font-semibold text-foreground/80">{label}</Label>
       {children}
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}

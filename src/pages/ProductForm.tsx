@@ -263,7 +263,7 @@ export default function ProductForm() {
               <Input autoFocus={!id} value={p.name ?? ""} onFocus={() => setNameFocus(true)} onBlur={() => setNameFocus(false)} onChange={(e) => setP({ ...p, name: e.target.value })} placeholder={L("যেমন: জিআই পাইপ, পিভিসি এলবো, তালা", "e.g. GI Pipe, PVC Elbow")} />
               {nameFocus && nameHits.length > 0 && (
                 // ঘর থেকে বের হলে লুকায়; তালিকায় চাপ দিলে ফোকাস ঘরেই থাকে
-                <div className="grid gap-2 rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-2.5" onMouseDown={(e) => e.preventDefault()}>
+                <div className="grid min-w-0 grid-cols-1 gap-2 rounded-2xl border-2 border-amber-300 bg-amber-50/70 p-2.5" onMouseDown={(e) => e.preventDefault()}>
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-900">
                     <TriangleAlert className="size-4 shrink-0" />
                     {sameName.length
@@ -272,12 +272,12 @@ export default function ProductForm() {
                   </p>
                   <p className="text-xs text-amber-900/80">{L("নামে চাপ দিলে নামটা ঘরে বসবে", "Tap a name to use it")}</p>
                   {nameHits.map((i) => (
-                    <div key={i.product.id} className="flex items-center gap-2.5 rounded-xl bg-white p-2">
+                    <div key={i.product.id} className="flex min-w-0 items-center gap-2.5 rounded-xl bg-white p-2">
                       <IconTile name={i.category?.icon} color={i.category?.color} size="sm" />
                       <div className="min-w-0 flex-1">
                         <button
                           type="button"
-                          className="block max-w-full truncate text-left font-semibold underline-offset-2 hover:text-primary hover:underline"
+                          className="line-clamp-2 max-w-full text-left leading-snug font-semibold break-words underline-offset-2 hover:text-primary hover:underline"
                           title={L("এই নামটা নিন", "Use this name")}
                           onClick={() => setP({ ...p, name: i.product.name })}
                         >
@@ -287,8 +287,10 @@ export default function ProductForm() {
                           {[i.product.brand, i.category && B([i.category.name, i.category.name_en || i.category.name]), `${num(i.variants.length)} ${L("সাইজ", "sizes")}`].filter(Boolean).join(" · ")}
                         </p>
                       </div>
-                      <Button type="button" variant="outline" size="sm" onClick={() => nav(`/products/${i.product.id}?add=1`)}>
-                        <Pencil /> {L("সাইজ যোগ করুন", "Add size")}
+                      <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => nav(`/products/${i.product.id}?add=1`)}>
+                        <Pencil />
+                        <span className="hidden sm:inline">{L("সাইজ যোগ করুন", "Add size")}</span>
+                        <span className="sm:hidden">{L("সাইজ", "Size")}</span>
                       </Button>
                     </div>
                   ))}
@@ -328,7 +330,7 @@ export default function ProductForm() {
                         key={b}
                         type="button"
                         onClick={() => setP({ ...p, brand: b })}
-                        className={cn("h-8 rounded-full border-2 px-3 text-sm font-semibold", brandExact === b ? "border-primary bg-primary text-white" : "bg-white hover:bg-muted")}
+                        className={cn("h-8 max-w-full truncate rounded-full border-2 px-3 text-sm font-semibold", brandExact === b ? "border-primary bg-primary text-white" : "bg-white hover:bg-muted")}
                       >
                         {b}
                       </button>
