@@ -401,12 +401,21 @@ export default function Sell() {
                   <p className="truncate font-semibold leading-tight">{l.name}</p>
                   {l.variant_name && <p className="truncate text-sm text-muted-foreground">{l.variant_name}</p>}
                 </button>
+                {/* ছাড়ের পুরো হিসাব (%, টাকা, প্রতি পিসের দাম) — মুছুন বাটনের পাশে */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn("h-8 shrink-0 gap-1 px-2 text-xs", c.disc_amount > 0 ? "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200" : "text-amber-700")}
+                  onClick={() => setEditKey(l.key)}
+                >
+                  <Tag className="size-3.5" /> {L("ছাড় দিন", "Give discount")}
+                </Button>
                 <Button variant="ghost" size="icon-sm" className="text-red-600" onClick={() => removeLine(l.key)} aria-label="remove">
                   <Trash2 />
                 </Button>
               </div>
               <div className="mt-1.5 flex items-center gap-2">
-                <div className="flex items-center rounded-lg border">
+                <div className="flex shrink-0 items-center rounded-lg border">
                   <Button variant="ghost" size="icon-sm" onClick={() => (l.qty > 1 ? setLine(l.key, { qty: round2(l.qty - 1) }) : removeLine(l.key))} aria-label="minus">
                     <Minus />
                   </Button>
@@ -414,34 +423,34 @@ export default function Sell() {
                     value={l.qty}
                     allowEmpty={false}
                     onValueChange={(n) => setLine(l.key, { qty: n })}
-                    className="w-16 [&_input]:h-9 [&_input]:border-0 [&_input]:px-1 [&_input]:text-center [&_input]:text-base"
+                    className="w-12 [&_input]:h-9 [&_input]:border-0 [&_input]:px-1 [&_input]:text-center [&_input]:text-base"
                   />
                   <Button variant="ghost" size="icon-sm" onClick={() => setLine(l.key, { qty: round2(l.qty + 1) })} aria-label="plus">
                     <Plus />
                   </Button>
                 </div>
-                <button type="button" onClick={() => setEditKey(l.key)} className="tabular min-w-0 flex-1 text-left text-sm text-muted-foreground">
+                <button type="button" onClick={() => setEditKey(l.key)} className="tabular min-w-0 flex-1 truncate text-left text-sm text-muted-foreground">
                   × {money(c.price)}
                 </button>
-                <span className="text-right">
-                  {c.disc_amount > 0 && <span className="tabular block text-xs text-muted-foreground line-through">{money(round2(l.qty * l.list_price))}</span>}
-                  <span className="tabular block font-bold">{money(c.total)}</span>
-                </span>
+                {/* মোট টাকা এখানেই বদলানো যায় — কম লিখলে বাকিটা ছাড় হিসেবে ধরা হয় */}
+                <NumInput
+                  value={c.total}
+                  allowEmpty={false}
+                  prefix="৳"
+                  aria-label={L("এই পণ্যের মোট দাম", "Total for this item")}
+                  className="w-28 shrink-0 [&_input]:h-9 [&_input]:text-right [&_input]:text-base [&_input]:font-bold"
+                  onValueChange={(n) => {
+                    const base = round2(l.qty * l.list_price);
+                    setLine(l.key, n >= base ? { disc_mode: "none", disc_value: 0 } : { disc_mode: "amount", disc_value: round2(base - n) });
+                  }}
+                />
               </div>
-              {/* প্রতিটা পণ্যে আলাদা ছাড় — চাপ দিলে ছাড়ের ঘর খোলে */}
-              <button
-                type="button"
-                onClick={() => setEditKey(l.key)}
-                className={cn(
-                  "mt-1.5 inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold",
-                  c.disc_amount > 0 ? "border-amber-300 bg-amber-100 text-amber-800" : "border-dashed text-muted-foreground hover:border-amber-400 hover:text-amber-700",
-                )}
-              >
-                <Tag className="size-3.5" />
-                {c.disc_amount > 0
-                  ? L(`ছাড় ${money(c.disc_amount)} (${num(c.percent)}%) · বদলান`, `Discount ${money(c.disc_amount)} (${num(c.percent)}%) · change`)
-                  : L("এই পণ্যে ছাড় দিন", "Discount this item")}
-              </button>
+              {c.disc_amount > 0 && (
+                <p className="tabular mt-1 text-right text-xs font-semibold text-amber-700">
+                  <span className="mr-1 font-normal text-muted-foreground line-through">{money(round2(l.qty * l.list_price))}</span>
+                  {L(`ছাড় ${money(c.disc_amount)} (${num(c.percent)}%)`, `Discount ${money(c.disc_amount)} (${num(c.percent)}%)`)}
+                </p>
+              )}
               {l.qty > stock ? (
                 <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-amber-700">
                   <TriangleAlert className="size-3" /> {L(`স্টকে আছে ${num(stock)} — বিক্রির পর স্টক হবে ${num(round2(stock - l.qty))}`, `${num(stock)} in stock — will be ${num(round2(stock - l.qty))} after sale`)}
